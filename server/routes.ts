@@ -747,6 +747,21 @@ RESPONSE FORMATTING RULES - VERY IMPORTANT:
 
 Always be helpful and suggest related actions the user might want to take.`;
       
+      // Helper to detect if response is JSON and needs formatting
+      const isJsonResponse = (text: string): boolean => {
+        const trimmed = text.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+          try {
+            JSON.parse(trimmed);
+            return true;
+          } catch {
+            return false;
+          }
+        }
+        return false;
+      };
+
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: [
@@ -771,34 +786,26 @@ Always be helpful and suggest related actions the user might want to take.`;
               part.functionCall.args
             );
             
-            const formatInstruction = `Based on this function result, provide a clear, friendly response to the user. Format nicely with bullet points if listing items. NEVER show raw JSON - always convert data into natural language sentences.`;
+            // ALWAYS use our fallback formatter for reliable formatting
+            // The AI often returns JSON despite instructions
+            finalResponse = formatFunctionResult(part.functionCall.name, functionResult);
             
-            const followUp = await ai.models.generateContent({
-              model: "gemini-2.5-flash",
-              contents: [
-                { role: "user", parts: [{ text: systemContext }] },
-                ...chatMessages,
-                { role: "model", parts: [{ functionCall: part.functionCall }] },
-                {
-                  role: "user",
-                  parts: [{
-                    functionResponse: {
-                      name: part.functionCall.name,
-                      response: functionResult,
-                    },
-                  }],
-                },
-                { role: "user", parts: [{ text: formatInstruction }] },
-              ],
-            });
-            
-            finalResponse = followUp.text || formatFunctionResult(part.functionCall.name, functionResult);
           } else if (part.text) {
-            finalResponse += part.text;
+            let textResponse = part.text;
+            // Guard against JSON in regular responses too
+            if (isJsonResponse(textResponse)) {
+              textResponse = "I can help you with that! What would you like to know about our menu, inventory, or orders?";
+            }
+            finalResponse += textResponse;
           }
         }
       } else {
-        finalResponse = response.text || "I apologize, but I couldn't process that request.";
+        let textResponse = response.text || "I apologize, but I couldn't process that request.";
+        // Final guard against any JSON responses
+        if (isJsonResponse(textResponse)) {
+          textResponse = "I'm here to help! You can ask me to show the menu, check inventory, place orders, or get financial insights.";
+        }
+        finalResponse = textResponse;
       }
       
       await storage.createMessage(convId, "assistant", finalResponse);
