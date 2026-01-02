@@ -24,6 +24,8 @@ interface StoreContextType {
   getLowStockItems: () => InventoryItem[];
   getDemandForecast: () => { itemId: string, name: string, suggestedStock: number, reason: string }[];
   getChefPerformance: () => { name: string, rating: number, sales: number, raiseSuggested: boolean }[];
+  addFunds: (amount: number) => void;
+  operatingFunds: number;
   realtimeInsights: string[];
 }
 
@@ -42,6 +44,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalCost, setTotalCost] = useState(0);
+  const [operatingFunds, setOperatingFunds] = useState(5000); // Initial budget
   const [cart, setCart] = useState<CartItem[]>([]);
   const [realtimeInsights, setRealtimeInsights] = useState<string[]>([]);
   const { toast } = useToast();
@@ -89,6 +92,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         "Insight: Drink attach rate is low. Suggest upselling shakes."
       ][Math.floor(Math.random() * 5)];
       
+      // Check Funds
+      if (operatingFunds < 1000) {
+         setRealtimeInsights(prev => ["CRITICAL: Operating funds low (<$1000). Restock carefully.", ...prev].slice(0, 5));
+      }
+
       setRealtimeInsights(prev => [randomInsight, ...prev].slice(0, 5));
 
       toast({
@@ -150,6 +158,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const addFunds = (amount: number) => {
+    setOperatingFunds(prev => prev + amount);
+    addLog('system', `Funds Added: $${amount.toFixed(2)}`);
+    toast({
+      title: "Funds Added",
+      description: `$${amount.toFixed(2)} added to operating budget.`,
+    });
+  };
+
   const addLog = (type: LogEntry['type'], message: string, amount: number = 0) => {
     const newLog: LogEntry = {
       id: Math.random().toString(36).substr(2, 9),
@@ -200,6 +217,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     const cost = amount * item.pricePerUnit;
     
+    if (operatingFunds < cost) {
+      toast({
+        variant: "destructive",
+        title: "Insufficient Funds",
+        description: `Need $${cost.toFixed(2)} but only have $${operatingFunds.toFixed(2)}.`,
+      });
+      return;
+    }
+
+    setOperatingFunds(prev => prev - cost);
+    
     setInventory(prev => prev.map(i => 
       i.id === id ? { ...i, quantity: i.quantity + amount, lastRestocked: new Date().toISOString() } : i
     ));
@@ -245,6 +273,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }));
 
     setTotalRevenue(prev => prev + menuItem.price);
+    setOperatingFunds(prev => prev + menuItem.price); // Revenue goes back to funds
     
     let modText = "";
     if (modifications && (modifications.remove.length > 0 || modifications.add.length > 0)) {
@@ -349,6 +378,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       checkout,
       getDemandForecast,
       getChefPerformance,
+      addFunds,
+      operatingFunds,
       realtimeInsights
     }}>
       {children}

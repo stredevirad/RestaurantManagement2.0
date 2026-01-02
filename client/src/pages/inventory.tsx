@@ -20,18 +20,20 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Plus, Search, AlertCircle, Zap } from "lucide-react";
+import { Plus, Search, AlertCircle, Zap, DollarSign } from "lucide-react";
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { useState } from "react";
 import { Label } from "@/components/ui/label";
 
 export default function InventoryPage() {
-  const { inventory, restockItem } = useStore();
+  const { inventory, restockItem, operatingFunds, addFunds } = useStore();
   const [searchTerm, setSearchTerm] = useState("");
   const [restockAmount, setRestockAmount] = useState<number>(10);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [fundsOpen, setFundsOpen] = useState(false);
+  const [fundsAmount, setFundsAmount] = useState(1000);
   const [aiTip, setAiTip] = useState("Monitoring supply levels... Type 'Analyze' for procurement strategy.");
 
   const analyzeStock = () => {
@@ -56,6 +58,11 @@ export default function InventoryPage() {
     }
   };
 
+  const handleAddFunds = () => {
+    addFunds(fundsAmount);
+    setFundsOpen(false);
+  };
+
   return (
     <div className="space-y-8">
       <motion.div 
@@ -68,6 +75,41 @@ export default function InventoryPage() {
           <p className="text-muted-foreground font-medium">Real-time supply chain monitoring & replenishment.</p>
         </div>
         <div className="flex items-center gap-6">
+          <Card className="bg-emerald-500/10 border-emerald-500/20 p-4 rounded-2xl flex items-center gap-4 max-w-sm">
+            <div className="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center">
+              <DollarSign className="text-emerald-500 h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Operating Budget</p>
+              <p className="text-xl font-black text-emerald-500 leading-tight">${operatingFunds.toFixed(2)}</p>
+            </div>
+            <Dialog open={fundsOpen} onOpenChange={setFundsOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-500">
+                  <Plus className="h-4 w-4" /> Add
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Operating Funds</DialogTitle>
+                  <DialogDescription>Inject capital into the operating budget for restocking.</DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                  <Label>Amount ($)</Label>
+                  <Input 
+                    type="number" 
+                    value={fundsAmount} 
+                    onChange={(e) => setFundsAmount(Number(e.target.value))} 
+                    className="mt-2"
+                  />
+                </div>
+                <DialogFooter>
+                  <Button onClick={handleAddFunds}>Confirm Deposit</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </Card>
+
           <Card className="bg-primary/5 border-primary/20 p-4 rounded-2xl flex items-center gap-4 max-w-sm">
             <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
               <Zap className="text-primary h-5 w-5" />
@@ -78,6 +120,7 @@ export default function InventoryPage() {
             </div>
             <Button size="sm" variant="ghost" onClick={analyzeStock} className="hover:bg-primary/20">Analyze</Button>
           </Card>
+          
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input

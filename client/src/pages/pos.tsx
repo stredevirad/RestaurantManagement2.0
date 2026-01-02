@@ -23,6 +23,14 @@ import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
 
+// Add-on configuration based on category
+const ADD_ONS: Record<string, string[]> = {
+  main: ['Extra Cheese', 'Bacon', 'Avocado', 'Jalapeños', 'Fried Egg'],
+  appetizer: ['Extra Sauce', 'Cheese Sauce', 'Bacon Bits'],
+  dessert: ['Whipped Cream', 'Rainbow Sprinkles', 'Chocolate Sauce', 'Cherry'],
+  drink: ['Whipped Cream', 'Extra Shot', 'Caramel Drizzle'],
+};
+
 export default function POSPage() {
   const { menu, processSale, inventory, submitRating, cart, addToCart, removeFromCart, checkout, clearCart } = useStore();
   const [ratingItem, setRatingItem] = useState<string | null>(null);
@@ -107,27 +115,31 @@ export default function POSPage() {
                         transition={{ delay: index * 0.05 }}
                         whileHover={{ y: -5 }}
                       >
-                        <Card className="flex flex-col h-full bg-card/40 backdrop-blur-xl border-white/5 hover:border-primary/50 transition-all duration-500 rounded-3xl overflow-hidden group shadow-2xl min-h-[380px]">
+                        <Card className="flex flex-col h-full bg-card/40 backdrop-blur-xl border-white/5 hover:border-primary/50 transition-all duration-500 rounded-3xl overflow-hidden group shadow-2xl min-h-[420px]">
                           <CardHeader className="p-6 pb-2">
-                            <div className="flex justify-between items-start gap-4">
-                              <CardTitle className="text-2xl font-bold tracking-tight group-hover:text-primary transition-colors">{item.name}</CardTitle>
-                              <Badge variant="secondary" className="font-mono text-lg py-1 px-3 bg-primary/10 text-primary border border-primary/20 rounded-xl whitespace-nowrap">
-                                ${item.price.toFixed(2)}
-                              </Badge>
+                            <div className="flex flex-col gap-2">
+                              <CardTitle className="text-2xl font-bold tracking-tight group-hover:text-primary transition-colors line-clamp-1" title={item.name}>{item.name}</CardTitle>
+                              <div className="flex items-center justify-between">
+                                <Badge variant="secondary" className="font-mono text-lg py-1 px-3 bg-primary/10 text-primary border border-primary/20 rounded-xl whitespace-nowrap">
+                                  ${item.price.toFixed(2)}
+                                </Badge>
+                                <div className="flex items-center gap-1.5 text-muted-foreground font-mono text-xs">
+                                  <Clock className="h-4 w-4 text-primary" />
+                                  {item.prepTime}
+                                </div>
+                              </div>
                             </div>
                           </CardHeader>
                           <CardContent className="px-6 flex-1 space-y-6 flex flex-col">
-                            <p className="text-sm text-muted-foreground/90 leading-relaxed font-medium flex-1">{item.description}</p>
+                            <ScrollArea className="h-[80px]">
+                              <p className="text-sm text-muted-foreground/90 leading-relaxed font-medium">{item.description}</p>
+                            </ScrollArea>
                             
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between mt-auto">
                               <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/10 rounded-full border border-yellow-500/20">
                                 <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
                                 <span className="font-bold text-yellow-500 text-sm">{item.rating.toFixed(1)}</span>
                                 <span className="text-yellow-500/60 text-[10px] font-bold">({item.ratingCount})</span>
-                              </div>
-                              <div className="flex items-center gap-1.5 text-muted-foreground font-mono text-xs">
-                                <Clock className="h-4 w-4 text-primary" />
-                                {item.prepTime}
                               </div>
                             </div>
 
@@ -183,7 +195,7 @@ export default function POSPage() {
                                   <div className="space-y-3">
                                     <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Add Extra (+$2.00)</Label>
                                     <div className="flex flex-wrap gap-2">
-                                      {['Extra Sauce', 'Jalapeños', 'Avocado', 'Bacon'].map(extra => {
+                                      {(ADD_ONS[item.category] || ADD_ONS['main']).map(extra => {
                                         const isAdded = mods.add.includes(extra);
                                         return (
                                           <Badge 

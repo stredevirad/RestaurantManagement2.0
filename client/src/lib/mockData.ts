@@ -59,6 +59,12 @@ export const initialInventory: InventoryItem[] = [
   { id: 'inv-21', sku: 'DRESS-021', name: 'Caesar Dressing', quantity: 10, unit: 'L', threshold: 2, pricePerUnit: 5.00, category: 'pantry', lastRestocked: '2025-01-01' },
   { id: 'inv-22', sku: 'BBQ-022', name: 'BBQ Sauce', quantity: 15, unit: 'L', threshold: 5, pricePerUnit: 3.50, category: 'pantry', lastRestocked: '2025-01-01' },
   { id: 'inv-23', sku: 'BAC-023', name: 'Smoked Bacon', quantity: 25, unit: 'kg', threshold: 5, pricePerUnit: 9.50, category: 'meat', lastRestocked: '2025-01-02' },
+  // Add-ons
+  { id: 'inv-24', sku: 'SPNK-024', name: 'Rainbow Sprinkles', quantity: 10, unit: 'kg', threshold: 2, pricePerUnit: 5.00, category: 'pantry', lastRestocked: '2025-01-01' },
+  { id: 'inv-25', sku: 'WHIP-025', name: 'Whipped Cream', quantity: 20, unit: 'cans', threshold: 5, pricePerUnit: 3.00, category: 'dairy', lastRestocked: '2025-01-02' },
+  { id: 'inv-26', sku: 'CHER-026', name: 'Maraschino Cherries', quantity: 5, unit: 'jars', threshold: 1, pricePerUnit: 4.50, category: 'pantry', lastRestocked: '2025-01-01' },
+  { id: 'inv-27', sku: 'JAL-027', name: 'Jalapeños', quantity: 10, unit: 'kg', threshold: 2, pricePerUnit: 2.50, category: 'produce', lastRestocked: '2025-01-01' },
+  { id: 'inv-28', sku: 'AVO-028', name: 'Avocado', quantity: 15, unit: 'kg', threshold: 3, pricePerUnit: 6.00, category: 'produce', lastRestocked: '2025-01-02' },
 ];
 
 export const initialMenu: MenuItem[] = [
