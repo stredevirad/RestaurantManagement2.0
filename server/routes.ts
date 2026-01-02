@@ -317,6 +317,7 @@ async function handleFunctionCall(functionName: string, args: any): Promise<any>
           status: "pending"
         },
         [{
+          orderId: 0,
           menuItemId: args.menuItemId,
           menuItemName: menuItem.name,
           price: menuItem.price,
@@ -660,126 +661,6 @@ export async function registerRoutes(
         totalCost: cost,
         lowStockCount: lowStock.length,
       });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Add funds endpoint
-  app.post("/api/funds/add", async (req: Request, res: Response) => {
-    try {
-      const { amount } = req.body;
-      if (typeof amount !== 'number' || amount <= 0) {
-        return res.status(400).json({ message: "Invalid amount" });
-      }
-      
-      const fundsStr = await storage.getSetting("operating_funds");
-      const currentFunds = fundsStr ? parseFloat(fundsStr.value) : 5000;
-      const newFunds = currentFunds + amount;
-      
-      await storage.updateSetting("operating_funds", newFunds.toString());
-      await storage.createLog({ id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, type: "system", message: `Funds Added: $${amount.toFixed(2)}`, amount: 0 });
-      
-      res.json({ success: true, newFunds });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Restock inventory endpoint
-  app.post("/api/inventory/restock", async (req: Request, res: Response) => {
-    try {
-      const { itemId, quantity } = req.body;
-      if (!itemId || typeof quantity !== 'number' || quantity <= 0) {
-        return res.status(400).json({ message: "Invalid item or quantity" });
-      }
-      
-      const item = await storage.getInventoryItem(itemId);
-      if (!item) {
-        return res.status(404).json({ message: "Item not found" });
-      }
-      
-      const cost = quantity * item.pricePerUnit;
-      
-      // Check funds
-      const fundsStr = await storage.getSetting("operating_funds");
-      const currentFunds = fundsStr ? parseFloat(fundsStr.value) : 5000;
-      
-      if (currentFunds < cost) {
-        return res.status(400).json({ message: `Insufficient funds. Need $${cost.toFixed(2)} but only have $${currentFunds.toFixed(2)}.` });
-      }
-      
-      // Deduct from funds
-      await storage.updateSetting("operating_funds", (currentFunds - cost).toString());
-      
-      // Update inventory
-      await storage.updateInventoryQuantity(itemId, item.quantity + quantity);
-      
-      // Log the restock
-      await storage.createLog({ id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, type: "restock", message: `Replenished ${quantity}${item.unit} of ${item.name}`, amount: -cost });
-      await storage.createLog({ id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, type: "email", message: `RESTOCK NOTIFICATION: ${item.name} has been replenished by ${quantity} ${item.unit}`, amount: 0 });
-      
-      res.json({ success: true, newQuantity: item.quantity + quantity, cost });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Create order endpoint (for POS and API orders)
-  app.post("/api/orders", async (req: Request, res: Response) => {
-    try {
-      const { menuItemId, customerName, allergies, removedIngredients, specialInstructions, quantity } = req.body;
-      
-      const menuItem = await storage.getMenuItem(menuItemId);
-      if (!menuItem) {
-        return res.status(404).json({ message: "Menu item not found" });
-      }
-      
-      const qty = quantity || 1;
-      const totalPrice = menuItem.price * qty;
-      
-      // Deduct inventory for this order
-      const ingredients = await storage.getMenuIngredients(menuItemId);
-      const removedList = (removedIngredients || '').split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
-      
-      for (const ing of ingredients) {
-        const invItem = await storage.getInventoryItem(ing.inventoryId);
-        if (invItem) {
-          const shouldSkip = removedList.some((r: string) => invItem.name.toLowerCase().includes(r));
-          if (!shouldSkip) {
-            const newQty = Math.max(0, invItem.quantity - (ing.quantity * qty));
-            await storage.updateInventoryQuantity(ing.inventoryId, newQty);
-          }
-        }
-      }
-      
-      // Update funds (revenue)
-      const fundsStr = await storage.getSetting("operating_funds");
-      const currentFunds = fundsStr ? parseFloat(fundsStr.value) : 5000;
-      await storage.updateSetting("operating_funds", (currentFunds + totalPrice).toString());
-      
-      // Create order with items in database
-      const orderItemsList = [{
-        menuItemId,
-        menuItemName: menuItem.name,
-        quantity: qty,
-        price: menuItem.price,
-        removedIngredients: removedIngredients || null,
-        specialInstructions: specialInstructions || null,
-      }];
-      
-      const order = await storage.createOrder({
-        total: totalPrice,
-        status: "pending",
-        customerName: customerName || "Walk-in",
-        allergies: allergies || null,
-      }, orderItemsList);
-      
-      // Log the sale
-      const modText = removedIngredients ? ` (No: ${removedIngredients})` : '';
-      await storage.createLog({ id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, type: "sale", message: `Order #${order.id}: ${qty}x ${menuItem.name}${modText} for ${customerName || 'Walk-in'}`, amount: totalPrice });
-      
-      res.json({ success: true, orderId: order.id, total: totalPrice });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

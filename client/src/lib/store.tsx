@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { InventoryItem, MenuItem, LogEntry, initialInventory, initialMenu } from './mockData';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -18,7 +18,7 @@ interface StoreContextType {
   cart: CartItem[];
 
   restockItem: (id: string, amount: number) => void;
-  processSale: (menuItemId: string, modifications?: { remove: string[], add: string[] }) => Promise<boolean>;
+  processSale: (menuItemId: string, modifications?: { remove: string[], add: string[] }) => boolean;
   recordWaste: (menuItemId: string, reason: string) => void;
   submitRating: (menuItemId: string, rating: number) => void;
   getLowStockItems: () => InventoryItem[];
@@ -27,7 +27,6 @@ interface StoreContextType {
   addFunds: (amount: number) => void;
   operatingFunds: number;
   realtimeInsights: string[];
-  refreshData: () => void;
 }
 
 export interface CartItem {
@@ -45,77 +44,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalCost, setTotalCost] = useState(0);
-  const [operatingFunds, setOperatingFunds] = useState(5000);
+  const [operatingFunds, setOperatingFunds] = useState(5000); // Initial budget
   const [cart, setCart] = useState<CartItem[]>([]);
   const [realtimeInsights, setRealtimeInsights] = useState<string[]>([]);
   const [orderBuffer, setOrderBuffer] = useState<{items: string[], total: number}[]>([]);
-  const [lastLogCount, setLastLogCount] = useState(0);
   const { toast } = useToast();
-
-  // Fetch data from API
-  const refreshData = useCallback(async () => {
-    try {
-      const [inventoryRes, menuRes, logsRes, statsRes] = await Promise.all([
-        fetch('/api/inventory'),
-        fetch('/api/menu'),
-        fetch('/api/logs'),
-        fetch('/api/stats'),
-      ]);
-      
-      if (inventoryRes.ok) {
-        const data = await inventoryRes.json();
-        setInventory(data);
-      }
-      if (menuRes.ok) {
-        const data = await menuRes.json();
-        setMenu(data);
-      }
-      if (logsRes.ok) {
-        const data = await logsRes.json();
-        // Check for new orders from chatbot and generate insights
-        if (data.length > lastLogCount) {
-          const newLogs = data.slice(0, data.length - lastLogCount);
-          const newSales = newLogs.filter((l: LogEntry) => l.type === 'sale');
-          
-          if (newSales.length > 0) {
-            // Generate AI insight for new chatbot orders
-            const latestSale = newSales[0];
-            if (latestSale.message.includes('Order #')) {
-              const insight = `AI CHATBOT: ${latestSale.message} - $${latestSale.amount?.toFixed(2)} revenue added`;
-              setRealtimeInsights(prev => [insight, ...prev].slice(0, 10));
-            }
-          }
-          setLastLogCount(data.length);
-        }
-        setLogs(data);
-      }
-      if (statsRes.ok) {
-        const data = await statsRes.json();
-        setOperatingFunds(data.operatingFunds);
-        setTotalRevenue(data.totalRevenue);
-        setTotalCost(data.totalCost);
-        
-        // Add low stock warning to insights
-        if (data.operatingFunds < 1000) {
-          setRealtimeInsights(prev => {
-            if (!prev.includes("CRITICAL: Operating funds low (<$1000). Restock carefully.")) {
-              return ["CRITICAL: Operating funds low (<$1000). Restock carefully.", ...prev].slice(0, 10);
-            }
-            return prev;
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Failed to refresh data:', error);
-    }
-  }, [lastLogCount]);
-
-  // Initial data fetch and polling
-  useEffect(() => {
-    refreshData();
-    const interval = setInterval(refreshData, 3000); // Refresh every 3 seconds
-    return () => clearInterval(interval);
-  }, [refreshData]);
 
   const addToCart = (menuItemId: string, modifications: { remove: string[], add: string[] }) => {
     const newItem: CartItem = {
@@ -139,18 +72,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setCart([]);
   };
 
-  const checkout = async () => {
+  const checkout = () => {
     if (cart.length === 0) return;
     
-    // Process all items and wait for all results
-    const results = await Promise.all(
-      cart.map(item => processSale(item.menuItemId, item.modifications))
-    );
-    
-    const successCount = results.filter(Boolean).length;
+    let successCount = 0;
+    cart.forEach(item => {
+      const success = processSale(item.menuItemId, item.modifications);
+      if (success) successCount++;
+    });
 
     if (successCount > 0) {
-      // Store cart data before clearing
+      setCart([]);
+      
+      // Add current order to buffer for analysis
       const orderTotal = cart.reduce((sum, item) => {
         const m = menu.find(i => i.id === item.menuItemId);
         return sum + (m?.price || 0) * item.quantity;
@@ -160,8 +94,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
          const m = menu.find(i => i.id === item.menuItemId);
          return m?.name || 'Unknown';
       });
-
-      setCart([]);
 
       setOrderBuffer(prev => {
         const newBuffer = [...prev, { items: orderItems, total: orderTotal }];
@@ -187,7 +119,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return newBuffer;
       });
 
-      // Generate AI Real-time Insight
+      // Generate AI Real-time Insight (Keep random one for immediate feedback too, or remove if too noisy)
       const randomInsight = [
         "Insight: High demand for burgers detected. Prepare more patties.",
         "Insight: Salad orders increasing. Ensure lettuce is prepped.",
@@ -262,34 +194,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const addFunds = async (amount: number) => {
-    try {
-      const res = await fetch('/api/funds/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount }),
-      });
-      
-      if (res.ok) {
-        toast({
-          title: "Funds Added",
-          description: `$${amount.toFixed(2)} added to operating budget.`,
-        });
-        refreshData();
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Failed",
-          description: "Could not add funds.",
-        });
-      }
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to connect to server.",
-      });
-    }
+  const addFunds = (amount: number) => {
+    setOperatingFunds(prev => prev + amount);
+    addLog('system', `Funds Added: $${amount.toFixed(2)}`);
+    toast({
+      title: "Funds Added",
+      description: `$${amount.toFixed(2)} added to operating budget.`,
+    });
   };
 
   const addLog = (type: LogEntry['type'], message: string, amount: number = 0) => {
@@ -336,7 +247,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
   }, [inventory]);
 
-  const restockItem = async (id: string, amount: number) => {
+  const restockItem = (id: string, amount: number) => {
     const item = inventory.find(i => i.id === id);
     if (!item) return;
 
@@ -351,84 +262,68 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    try {
-      const res = await fetch('/api/inventory/restock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId: id, quantity: amount }),
-      });
-      
-      if (res.ok) {
-        toast({
-          title: "Stock Replenished",
-          description: `Added ${amount}${item.unit} to ${item.name}. Register updated.`,
-        });
-        refreshData();
-      } else {
-        const error = await res.json();
-        toast({
-          variant: "destructive",
-          title: "Restock Failed",
-          description: error.message || "Failed to restock item.",
-        });
-      }
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to connect to server.",
-      });
-    }
+    setOperatingFunds(prev => prev - cost);
+    
+    setInventory(prev => prev.map(i => 
+      i.id === id ? { ...i, quantity: i.quantity + amount, lastRestocked: new Date().toISOString() } : i
+    ));
+    
+    setTotalCost(prev => prev + cost);
+    addLog('restock', `Replenished ${amount}${item.unit} of ${item.name}`, -cost);
+    addLog('email', `RESTOCK NOTIFICATION: ${item.name} has been replenished by ${amount} ${item.unit}`);
+    
+    toast({
+      title: "Stock Replenished",
+      description: `Added ${amount}${item.unit} to ${item.name}. Register updated.`,
+    });
   };
 
-  const processSale = async (menuItemId: string, modifications?: { remove: string[], add: string[] }): Promise<boolean> => {
+  const processSale = (menuItemId: string, modifications?: { remove: string[], add: string[] }): boolean => {
     const menuItem = menu.find(m => m.id === menuItemId);
     if (!menuItem) return false;
 
-    try {
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          menuItemId,
-          customerName: 'POS Order',
-          allergies: '',
-          removedIngredients: modifications?.remove?.join(',') || '',
-          specialInstructions: modifications?.add?.join(',') || '',
-          quantity: 1,
-        }),
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        toast({
-          title: "Order Processed",
-          description: `${menuItem.name} sent to kitchen.`,
-        });
-        
-        // Generate insight for POS order
-        const insight = `POS: New order for ${menuItem.name} - $${menuItem.price.toFixed(2)}`;
-        setRealtimeInsights(prev => [insight, ...prev].slice(0, 10));
-        
-        refreshData();
-        return true;
-      } else {
-        const error = await res.json();
-        toast({
-          variant: "destructive",
-          title: "Order Failed",
-          description: error.message || "Failed to process order.",
-        });
-        return false;
-      }
-    } catch (error) {
+    // Check availability
+    const canMake = menuItem.ingredients.every(ing => {
+      const invItem = inventory.find(i => i.id === ing.inventoryId);
+      return invItem && invItem.quantity >= ing.quantity;
+    });
+
+    if (!canMake) {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "Failed to connect to server.",
+        title: "Out of Stock",
+        description: `Cannot make ${menuItem.name}. Missing ingredients.`,
       });
       return false;
     }
+
+    // Deduct stock (modified)
+    setInventory(prev => prev.map(item => {
+      const ing = menuItem.ingredients.find(i => i.inventoryId === item.id);
+      if (!ing) return item;
+      
+      // If user removed this ingredient, don't deduct
+      if (modifications?.remove.includes(item.name)) return item;
+      
+      return { ...item, quantity: Math.max(0, item.quantity - ing.quantity) };
+    }));
+
+    setTotalRevenue(prev => prev + menuItem.price);
+    setOperatingFunds(prev => prev + menuItem.price); // Revenue goes back to funds
+    
+    let modText = "";
+    if (modifications && (modifications.remove.length > 0 || modifications.add.length > 0)) {
+      modText = ` (Mods: -${modifications.remove.join(',')} +${modifications.add.join(',')})`;
+    }
+    
+    addLog('sale', `Sold 1x ${menuItem.name}${modText}`, menuItem.price);
+    
+    toast({
+      title: "Order Processed",
+      description: `${menuItem.name}${modText} sent to kitchen.`,
+    });
+
+    return true;
   };
 
   const recordWaste = (menuItemId: string, reason: string) => {
@@ -530,8 +425,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       getChefPerformance,
       addFunds,
       operatingFunds,
-      realtimeInsights,
-      refreshData
+      realtimeInsights
     }}>
       {children}
     </StoreContext.Provider>
