@@ -11,11 +11,25 @@ interface StoreContextType {
   totalCost: number;
   
   // Actions
+  addToCart: (menuItemId: string, modifications: { remove: string[], add: string[] }) => void;
+  removeFromCart: (cartItemId: string) => void;
+  clearCart: () => void;
+  checkout: () => void;
+  cart: CartItem[];
+
   restockItem: (id: string, amount: number) => void;
   processSale: (menuItemId: string, modifications?: { remove: string[], add: string[] }) => boolean;
   recordWaste: (menuItemId: string, reason: string) => void;
   submitRating: (menuItemId: string, rating: number) => void;
   getLowStockItems: () => InventoryItem[];
+  getDemandForecast: () => { itemId: string, name: string, suggestedStock: number, reason: string }[];
+}
+
+export interface CartItem {
+  id: string;
+  menuItemId: string;
+  quantity: number;
+  modifications: { remove: string[], add: string[] };
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -26,7 +40,74 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalCost, setTotalCost] = useState(0);
+  const [cart, setCart] = useState<CartItem[]>([]);
   const { toast } = useToast();
+
+  const addToCart = (menuItemId: string, modifications: { remove: string[], add: string[] }) => {
+    const newItem: CartItem = {
+      id: Math.random().toString(36).substr(2, 9),
+      menuItemId,
+      quantity: 1,
+      modifications
+    };
+    setCart(prev => [...prev, newItem]);
+    toast({
+      title: "Added to Cart",
+      description: "Item added to your current order.",
+    });
+  };
+
+  const removeFromCart = (cartItemId: string) => {
+    setCart(prev => prev.filter(item => item.id !== cartItemId));
+  };
+
+  const clearCart = () => {
+    setCart([]);
+  };
+
+  const checkout = () => {
+    if (cart.length === 0) return;
+    
+    let successCount = 0;
+    cart.forEach(item => {
+      const success = processSale(item.menuItemId, item.modifications);
+      if (success) successCount++;
+    });
+
+    if (successCount > 0) {
+      setCart([]);
+      toast({
+        title: "Order Placed",
+        description: `Successfully processed ${successCount} items.`,
+      });
+    }
+  };
+
+  const getDemandForecast = () => {
+    // Simple mock logic: recommend stocking up on ingredients used in high-rating/high-sale items
+    const forecast: { itemId: string, name: string, suggestedStock: number, reason: string }[] = [];
+    
+    // Find popular items (rating > 4.5 OR high rating count)
+    const popularDishes = menu.filter(m => m.rating >= 4.5 || m.ratingCount > 100);
+    
+    popularDishes.forEach(dish => {
+      dish.ingredients.forEach(ing => {
+        const invItem = inventory.find(i => i.id === ing.inventoryId);
+        if (invItem) {
+          if (!forecast.find(f => f.itemId === invItem.id)) {
+            forecast.push({
+              itemId: invItem.id,
+              name: invItem.name,
+              suggestedStock: Math.ceil(invItem.threshold * 2.5),
+              reason: `High demand for ${dish.name} (${dish.rating}★)`
+            });
+          }
+        }
+      });
+    });
+    
+    return forecast;
+  };
 
   const addLog = (type: LogEntry['type'], message: string, amount: number = 0) => {
     const newLog: LogEntry = {
@@ -219,7 +300,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       processSale,
       recordWaste,
       submitRating,
-      getLowStockItems
+      getLowStockItems,
+      cart,
+      addToCart,
+      removeFromCart,
+      clearCart,
+      checkout,
+      getDemandForecast
     }}>
       {children}
     </StoreContext.Provider>

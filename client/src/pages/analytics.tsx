@@ -1,16 +1,19 @@
 import { useStore } from "@/lib/store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend, LineChart, Line } from "recharts";
-import { Star, TrendingUp } from "lucide-react";
+import { Star, TrendingUp, Sparkles, TrendingDown, Package } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 export default function AnalyticsPage() {
-  const { menu, logs, totalRevenue } = useStore();
+  const { menu, logs, totalRevenue, getDemandForecast } = useStore();
 
   const satisfactionData = menu.map(item => ({
     name: item.name,
     rating: item.rating,
     reviews: item.ratingCount
   })).sort((a, b) => b.rating - a.rating);
+
+  const demandForecast = getDemandForecast();
 
   // Mock revenue data for the chart based on current logs + some history
   const revenueData = [
@@ -30,6 +33,53 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
+        {/* AI Insight Card */}
+        <Card className="col-span-1 md:col-span-2 bg-primary/5 border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              AI Demand Forecasting & Insights
+            </CardTitle>
+            <CardDescription>Autonomous suggestions for profit maximization and stock efficiency.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {demandForecast.length > 0 ? (
+                demandForecast.map(forecast => (
+                  <div key={forecast.itemId} className="bg-card border border-white/5 p-4 rounded-xl flex items-start gap-3 shadow-lg">
+                    <div className="bg-primary/20 p-2 rounded-lg">
+                      <TrendingUp className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm">Increase Stock: {forecast.name}</h4>
+                      <p className="text-xs text-muted-foreground mt-1 mb-2">{forecast.reason}</p>
+                      <Badge variant="outline" className="bg-primary/10 border-primary/20 text-primary">
+                        Target: {forecast.suggestedStock} units
+                      </Badge>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-full text-center py-6 text-muted-foreground">
+                  AI analysis indicates optimal stock levels currently. No immediate actions required.
+                </div>
+              )}
+              
+              <div className="bg-card border border-white/5 p-4 rounded-xl flex items-start gap-3 shadow-lg">
+                 <div className="bg-yellow-500/20 p-2 rounded-lg">
+                    <TrendingDown className="h-5 w-5 text-yellow-500" />
+                 </div>
+                 <div>
+                    <h4 className="font-bold text-sm">Minimize Waste</h4>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Prep items with &lt; 8 min prep time on-demand only.
+                    </p>
+                 </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

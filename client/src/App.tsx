@@ -4,6 +4,7 @@ import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { StoreProvider } from "@/lib/store";
 import { Layout } from "@/components/layout/Sidebar";
+import { AIChatbot } from "@/components/layout/AIChatbot";
 
 import DashboardPage from "@/pages/dashboard";
 import InventoryPage from "@/pages/inventory";
@@ -32,6 +33,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <StoreProvider>
         <Router />
+        <AIChatbot />
         <Toaster />
       </StoreProvider>
     </QueryClientProvider>
