@@ -30,6 +30,16 @@ export default function InventoryPage() {
   const [restockAmount, setRestockAmount] = useState<number>(10);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [aiTip, setAiTip] = useState("Monitoring supply levels... Type 'Analyze' for procurement strategy.");
+
+  const analyzeStock = () => {
+    const critical = inventory.filter(i => i.quantity <= i.threshold);
+    if (critical.length > 0) {
+      setAiTip(`URGENT: ${critical[0].name} is below safe threshold. I recommend restocking ${critical[0].threshold * 2} units to cover projected 48h demand.`);
+    } else {
+      setAiTip("Inventory health is 100%. All safety buffers are optimal for current sales velocity.");
+    }
+  };
 
   const filteredInventory = inventory.filter(item => 
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -46,24 +56,38 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center justify-between"
+      >
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Inventory Management</h2>
-          <p className="text-muted-foreground">Monitor stock levels and replenish supplies.</p>
+          <h2 className="text-4xl font-black tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent uppercase italic">Inventory Center</h2>
+          <p className="text-muted-foreground font-medium">Real-time supply chain monitoring & replenishment.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-6">
+          <Card className="bg-primary/5 border-primary/20 p-4 rounded-2xl flex items-center gap-4 max-w-sm">
+            <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
+              <Zap className="text-primary h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-primary">ShelfSense AI Agent</p>
+              <p className="text-xs font-bold text-white leading-tight">{aiTip}</p>
+            </div>
+            <Button size="sm" variant="ghost" onClick={analyzeStock} className="hover:bg-primary/20">Analyze</Button>
+          </Card>
           <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search SKUs..."
-              className="pl-8 w-[250px]"
+              placeholder="Filter SKUs..."
+              className="pl-10 w-[250px] rounded-2xl bg-white/5 border-white/10"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
         </div>
-      </div>
+      </motion.div>
 
       <div className="rounded-md border bg-card">
         <Table>

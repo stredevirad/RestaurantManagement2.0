@@ -92,11 +92,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const processSale = (menuItemId: string): boolean => {
+  const processSale = (menuItemId: string, modifications?: { remove: string[], add: string[] }): boolean => {
     const menuItem = menu.find(m => m.id === menuItemId);
     if (!menuItem) return false;
 
-    // Check availability first
+    // Check availability
     const canMake = menuItem.ingredients.every(ing => {
       const invItem = inventory.find(i => i.id === ing.inventoryId);
       return invItem && invItem.quantity >= ing.quantity;
@@ -111,18 +111,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
 
-    // Deduct stock
+    // Deduct stock (modified)
     setInventory(prev => prev.map(item => {
-      const ing = menuItem.ingredients.find(i => i.inventoryId === item.id);
-      return ing ? { ...item, quantity: Math.max(0, item.quantity - ing.quantity) } : item;
+      const ing = menuItem.ingredients.find(i => i.id === item.id);
+      if (!ing) return item;
+      
+      // If user removed this ingredient, don't deduct
+      if (modifications?.remove.includes(item.name)) return item;
+      
+      return { ...item, quantity: Math.max(0, item.quantity - ing.quantity) };
     }));
 
     setTotalRevenue(prev => prev + menuItem.price);
-    addLog('sale', `Sold 1x ${menuItem.name}`, menuItem.price);
+    
+    let modText = "";
+    if (modifications && (modifications.remove.length > 0 || modifications.add.length > 0)) {
+      modText = ` (Mods: -${modifications.remove.join(',')} +${modifications.add.join(',')})`;
+    }
+    
+    addLog('sale', `Sold 1x ${menuItem.name}${modText}`, menuItem.price);
     
     toast({
       title: "Order Processed",
-      description: `${menuItem.name} sent to kitchen. Inventory updated.`,
+      description: `${menuItem.name}${modText} sent to kitchen.`,
     });
 
     return true;

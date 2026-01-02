@@ -25,8 +25,26 @@ export default function POSPage() {
   const { menu, processSale, inventory, submitRating } = useStore();
   const [ratingItem, setRatingItem] = useState<string | null>(null);
   const [hoveredStar, setHoveredStar] = useState<number>(0);
+  const [customizingItem, setCustomizingItem] = useState<string | null>(null);
+  const [mods, setMods] = useState<{remove: string[], add: string[]}>({remove: [], add: []});
+  const [aiMessage, setAiMessage] = useState<string>("Welcome! I'm your ShelfSense AI. Need help choosing a dish based on current stock?");
 
   const categories = Array.from(new Set(menu.map(item => item.category)));
+
+  const handleOrder = (itemId: string) => {
+    processSale(itemId, mods);
+    setCustomizingItem(null);
+    setMods({remove: [], add: []});
+  };
+
+  const askAi = () => {
+    const lowStock = inventory.filter(i => i.quantity < i.threshold).map(i => i.name);
+    if (lowStock.length > 0) {
+      setAiMessage(`I recommend the ${menu.find(m => !m.ingredients.some(ing => lowStock.includes(inventory.find(inv => inv.id === ing.inventoryId)?.name || '')) )?.name || 'Crispy Fries'}. We are a bit low on ${lowStock[0]}, so this choice helps our kitchen stay efficient!`);
+    } else {
+      setAiMessage("All ingredients are perfectly stocked. Our Chef suggests the Double Smash Burger today!");
+    }
+  };
 
   return (
     <div className="space-y-8 h-full pb-20">
@@ -39,9 +57,21 @@ export default function POSPage() {
           <h2 className="text-4xl font-black tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Point of Sale</h2>
           <p className="text-muted-foreground mt-2">Precision inventory subtraction for every gourmet order.</p>
         </div>
-        <Button variant="outline" className="gap-2 rounded-full border-primary/20 hover:bg-primary/10">
-          <ShoppingCart className="h-4 w-4" /> View Current Order
-        </Button>
+        <div className="flex gap-4">
+          <Card className="bg-primary/5 border-primary/20 p-4 rounded-2xl flex items-center gap-4 max-w-md">
+            <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center animate-pulse">
+              <Zap className="text-black h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-primary">ShelfSense AI Agent</p>
+              <p className="text-xs font-bold text-white line-clamp-2">{aiMessage}</p>
+            </div>
+            <Button size="sm" variant="ghost" onClick={askAi} className="hover:bg-primary/20">Ask</Button>
+          </Card>
+          <Button variant="outline" className="gap-2 rounded-full border-primary/20 hover:bg-primary/10 self-center">
+            <ShoppingCart className="h-4 w-4" /> View Current Order
+          </Button>
+        </div>
       </motion.div>
 
       <Tabs defaultValue={categories[0]} className="w-full">
@@ -106,12 +136,72 @@ export default function POSPage() {
                         </div>
                       </CardContent>
                       <CardFooter className="p-6 bg-white/5 flex gap-3">
-                        <Button 
-                          className="flex-1 h-12 rounded-2xl font-bold tracking-widest text-xs uppercase shadow-lg shadow-primary/20 active:scale-95 transition-all"
-                          onClick={() => processSale(item.id)}
-                        >
-                          Order Now
-                        </Button>
+                        <Dialog open={customizingItem === item.id} onOpenChange={(open) => setCustomizingItem(open ? item.id : null)}>
+                          <DialogTrigger asChild>
+                            <Button 
+                              className="flex-1 h-12 rounded-2xl font-bold tracking-widest text-xs uppercase shadow-lg shadow-primary/20 active:scale-95 transition-all"
+                            >
+                              Customize & Order
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="rounded-[2.5rem] bg-card/95 backdrop-blur-2xl border-white/10">
+                            <DialogHeader>
+                              <DialogTitle className="text-2xl font-black italic">CUSTOMIZE {item.name}</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-6 py-4">
+                              <div className="space-y-3">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Remove Ingredients</Label>
+                                <div className="flex flex-wrap gap-2">
+                                  {item.ingredients.map(ing => {
+                                    const name = inventory.find(inv => inv.id === ing.inventoryId)?.name || '';
+                                    const isRemoved = mods.remove.includes(name);
+                                    return (
+                                      <Badge 
+                                        key={ing.inventoryId}
+                                        variant={isRemoved ? "destructive" : "outline"}
+                                        className="cursor-pointer py-1.5 px-3 rounded-xl transition-all"
+                                        onClick={() => {
+                                          setMods(prev => ({
+                                            ...prev,
+                                            remove: isRemoved ? prev.remove.filter(n => n !== name) : [...prev.remove, name]
+                                          }));
+                                        }}
+                                      >
+                                        {isRemoved ? 'Removed ' : ''}{name}
+                                      </Badge>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                              <div className="space-y-3">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Add Extra (+$2.00)</Label>
+                                <div className="flex flex-wrap gap-2">
+                                  {['Extra Sauce', 'Jalapeños', 'Avocado', 'Bacon'].map(extra => {
+                                    const isAdded = mods.add.includes(extra);
+                                    return (
+                                      <Badge 
+                                        key={extra}
+                                        variant={isAdded ? "default" : "outline"}
+                                        className="cursor-pointer py-1.5 px-3 rounded-xl transition-all"
+                                        onClick={() => {
+                                          setMods(prev => ({
+                                            ...prev,
+                                            add: isAdded ? prev.add.filter(n => n !== extra) : [...prev.add, extra]
+                                          }));
+                                        }}
+                                      >
+                                        {isAdded ? 'Added ' : ''}{extra}
+                                      </Badge>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button className="w-full h-12 rounded-2xl font-black" onClick={() => handleOrder(item.id)}>CONFIRM ORDER</Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
                         
                         <Dialog open={ratingItem === item.id} onOpenChange={(open) => {
                           setRatingItem(open ? item.id : null);
