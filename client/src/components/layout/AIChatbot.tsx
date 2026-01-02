@@ -6,7 +6,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageSquare, X, Send, Bot, User, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { useStore } from '@/lib/store';
 
 interface Message {
   id: string;
@@ -17,15 +16,13 @@ interface Message {
 export function AIChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { id: '1', role: 'assistant', content: "Hello! I am THALLIPOLI AI ChatGPT. I'm connected to your kitchen's live data. Ask me about inventory, sales, or strategy!" }
+    { id: '1', role: 'assistant', content: "Hello! I am THALLIPOLI AI. I'm connected to your kitchen's live data and can help you manage inventory, process sales, check finances, and provide strategic insights. Try asking me to 'restock beef' or 'what's low in stock?'" }
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [conversationId, setConversationId] = useState<number | null>(null);
   const [location, setLocation] = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
-  
-  // Access store data for "Context-Aware" responses
-  const { inventory, menu, operatingFunds, realtimeInsights, getLowStockItems, totalRevenue } = useStore();
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -33,59 +30,7 @@ export function AIChatbot() {
     }
   }, [messages, isTyping]);
 
-  const generateSmartResponse = (query: string) => {
-    const lowerQ = query.toLowerCase();
-    
-    // 1. Inventory & Stock Queries
-    if (lowerQ.includes('stock') || lowerQ.includes('inventory') || lowerQ.includes('have')) {
-      const lowStock = getLowStockItems();
-      if (lowerQ.includes('low') || lowerQ.includes('out')) {
-         if (lowStock.length === 0) return "Inventory is healthy! No items are currently below the threshold.";
-         return `⚠️ Critical: We are low on ${lowStock.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')}. Restock advised immediately.`;
-      }
-      // Check for specific item
-      const foundItem = inventory.find(i => lowerQ.includes(i.name.toLowerCase()));
-      if (foundItem) {
-        return `We currently have ${foundItem.quantity} ${foundItem.unit} of ${foundItem.name}. (Threshold: ${foundItem.threshold} ${foundItem.unit})`;
-      }
-      return `Total Inventory Value: $${inventory.reduce((acc, i) => acc + (i.quantity * i.pricePerUnit), 0).toFixed(2)}. Low stock items: ${lowStock.length}.`;
-    }
-
-    // 2. Financials
-    if (lowerQ.includes('money') || lowerQ.includes('funds') || lowerQ.includes('budget') || lowerQ.includes('revenue')) {
-      return `💰 Operating Budget: $${operatingFunds.toFixed(2)} | Total Revenue Today: $${totalRevenue.toFixed(2)}. ${operatingFunds < 1000 ? "WARNING: Funds are low!" : "Financial status is stable."}`;
-    }
-
-    // 3. Strategy & Insights
-    if (lowerQ.includes('strategy') || lowerQ.includes('insight') || lowerQ.includes('tip') || lowerQ.includes('advise')) {
-      if (realtimeInsights.length > 0) {
-        return `🧠 Latest AI Insight: "${realtimeInsights[0]}"`;
-      }
-      return "Strategy: Focus on high-margin items like the Vanilla Bean Shake and monitor the 'Bacon' stock levels as they are trending in sales.";
-    }
-
-    // 4. Menu
-    if (lowerQ.includes('menu') || lowerQ.includes('price') || lowerQ.includes('sell')) {
-      const foundDish = menu.find(m => lowerQ.includes(m.name.toLowerCase()));
-      if (foundDish) {
-        return `🍔 ${foundDish.name}: Selling for $${foundDish.price}. Rated ${foundDish.rating}⭐. Chef: ${foundDish.chef}.`;
-      }
-      return `We have ${menu.length} active items on the menu. Top rated: ${menu.sort((a,b) => b.rating - a.rating)[0].name}.`;
-    }
-
-    // 5. Navigation
-    if (lowerQ.includes('go to') || lowerQ.includes('navigate') || lowerQ.includes('show')) {
-        if (lowerQ.includes('pos')) { setLocation('/pos'); return "Opening Point of Sale..."; }
-        if (lowerQ.includes('inventory')) { setLocation('/inventory'); return "Navigating to Inventory..."; }
-        if (lowerQ.includes('kitchen')) { setLocation('/kitchen'); return "Opening Kitchen Display..."; }
-        if (lowerQ.includes('analytics') || lowerQ.includes('dashboard')) { setLocation('/analytics'); return "Showing Analytics..."; }
-    }
-
-    // Default Fallback
-    return "I can help with Inventory levels, Sales data, Financial status, or Menu details. Try asking 'What is low in stock?' or 'How much money do we have?'";
-  };
-
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
 
     const userMsg: Message = { id: Date.now().toString(), role: 'user', content: input };
@@ -93,13 +38,40 @@ export function AIChatbot() {
     setInput('');
     setIsTyping(true);
 
-    // Simulate AI processing time
-    setTimeout(() => {
-      const response = generateSmartResponse(userMsg.content);
-      const aiMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: response };
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: input,
+          conversationId,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.conversationId && !conversationId) {
+        setConversationId(data.conversationId);
+      }
+
+      const aiMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: data.response || "I apologize, but I couldn't process that request.",
+      };
+      
       setMessages(prev => [...prev, aiMsg]);
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: "I encountered an error processing your request. Please try again.",
+      };
+      setMessages(prev => [...prev, errorMsg]);
+    } finally {
       setIsTyping(false);
-    }, 800);
+    }
   };
 
   return (
@@ -120,9 +92,9 @@ export function AIChatbot() {
                       <Bot className="h-6 w-6 text-primary" />
                       <Sparkles className="h-3 w-3 text-yellow-400 absolute -top-1 -right-1 animate-pulse" />
                     </div>
-                    THALLIPOLI AI ChatGPT
+                    THALLIPOLI AI
                   </CardTitle>
-                  <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="h-8 w-8 hover:bg-white/10 text-white/70 hover:text-white">
+                  <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="h-8 w-8 hover:bg-white/10 text-white/70 hover:text-white" data-testid="button-close-chat">
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
@@ -131,7 +103,7 @@ export function AIChatbot() {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                   </span>
-                  <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-500">Connected to Store Data</span>
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-500">Powered by Gemini AI</span>
                 </div>
               </CardHeader>
               <CardContent className="flex-1 p-0 overflow-hidden bg-black/50">
@@ -141,6 +113,7 @@ export function AIChatbot() {
                       <div
                         key={msg.id}
                         className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                        data-testid={`message-${msg.role}-${msg.id}`}
                       >
                         {msg.role === 'assistant' && (
                           <div className="w-8 h-8 rounded-xl bg-primary/20 flex items-center justify-center shrink-0 border border-primary/30 mt-1">
@@ -153,6 +126,7 @@ export function AIChatbot() {
                               ? 'bg-primary text-primary-foreground rounded-tr-sm'
                               : 'bg-white/10 text-white rounded-tl-sm border border-white/5'
                           }`}
+                          data-testid={`text-message-${msg.role}`}
                         >
                           {msg.content}
                         </div>
@@ -184,12 +158,19 @@ export function AIChatbot() {
                   className="flex w-full gap-2"
                 >
                   <Input 
-                    placeholder="Ask about stock, sales, or menu..." 
+                    placeholder="Try: 'restock beef 20kg' or 'sell burger'" 
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     className="flex-1 bg-white/5 border-white/10 focus-visible:ring-primary/50 text-white placeholder:text-white/30"
+                    data-testid="input-chat-message"
                   />
-                  <Button type="submit" size="icon" disabled={!input.trim() || isTyping} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                  <Button 
+                    type="submit" 
+                    size="icon" 
+                    disabled={!input.trim() || isTyping} 
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    data-testid="button-send-message"
+                  >
                     <Send className="h-4 w-4" />
                   </Button>
                 </form>
@@ -204,6 +185,7 @@ export function AIChatbot() {
         whileTap={{ scale: 0.9 }}
         onClick={() => setIsOpen(!isOpen)}
         className="h-16 w-16 rounded-full bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-[0_0_40px_-10px_rgba(var(--primary),0.5)] flex items-center justify-center relative group border-2 border-white/10"
+        data-testid="button-toggle-chat"
       >
         {isOpen ? <X className="h-7 w-7" /> : <Bot className="h-8 w-8" />}
         {!isOpen && (

@@ -42,6 +42,7 @@ export const initialInventory: InventoryItem[] = [
   { id: 'inv-4', sku: 'TOM-004', name: 'Fresh Tomatoes', quantity: 20, unit: 'kg', threshold: 5, pricePerUnit: 2.00, category: 'produce', lastRestocked: '2025-01-02' },
   { id: 'inv-5', sku: 'LET-005', name: 'Iceberg Lettuce', quantity: 15, unit: 'heads', threshold: 5, pricePerUnit: 1.50, category: 'produce', lastRestocked: '2025-01-01' },
   { id: 'inv-6', sku: 'POT-006', name: 'Russet Potatoes', quantity: 80, unit: 'kg', threshold: 25, pricePerUnit: 0.80, category: 'produce', lastRestocked: '2024-12-30' },
+  { id: 'inv-7', sku: 'OIL-007', name: 'Vegetable Oil', quantity: 50, unit: 'L', threshold: 10, pricePerUnit: 3.50, category: 'pantry', lastRestocked: '2025-01-01' },
   // New ingredients
   { id: 'inv-8', sku: 'MUSH-008', name: 'Wild Mushrooms', quantity: 15, unit: 'kg', threshold: 5, pricePerUnit: 8.00, category: 'produce', lastRestocked: '2025-01-02' },
   { id: 'inv-9', sku: 'TRUF-009', name: 'Truffle Oil', quantity: 5, unit: 'L', threshold: 1, pricePerUnit: 25.00, category: 'pantry', lastRestocked: '2024-12-25' },

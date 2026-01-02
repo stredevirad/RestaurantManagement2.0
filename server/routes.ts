@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { GoogleGenAI, FunctionCallingMode, SchemaType } from "@google/genai";
+import { GoogleGenAI, FunctionCallingConfigMode, Type } from "@google/genai";
 import { initialInventory, initialMenu } from "../client/src/lib/mockData";
 
 const ai = new GoogleGenAI({
@@ -18,7 +18,7 @@ const functions = [
     name: "get_inventory_status",
     description: "Get current inventory levels and low stock items",
     parameters: {
-      type: SchemaType.OBJECT,
+      type: Type.OBJECT,
       properties: {},
       required: [],
     },
@@ -27,10 +27,10 @@ const functions = [
     name: "restock_item",
     description: "Restock an inventory item with a specified quantity",
     parameters: {
-      type: SchemaType.OBJECT,
+      type: Type.OBJECT,
       properties: {
-        itemId: { type: SchemaType.STRING, description: "The inventory item ID" },
-        quantity: { type: SchemaType.NUMBER, description: "Quantity to add" },
+        itemId: { type: Type.STRING, description: "The inventory item ID" },
+        quantity: { type: Type.NUMBER, description: "Quantity to add" },
       },
       required: ["itemId", "quantity"],
     },
@@ -39,7 +39,7 @@ const functions = [
     name: "get_menu_info",
     description: "Get menu items and their details",
     parameters: {
-      type: SchemaType.OBJECT,
+      type: Type.OBJECT,
       properties: {},
       required: [],
     },
@@ -48,9 +48,9 @@ const functions = [
     name: "process_sale",
     description: "Process a sale for a menu item",
     parameters: {
-      type: SchemaType.OBJECT,
+      type: Type.OBJECT,
       properties: {
-        menuItemId: { type: SchemaType.STRING, description: "The menu item ID to sell" },
+        menuItemId: { type: Type.STRING, description: "The menu item ID to sell" },
       },
       required: ["menuItemId"],
     },
@@ -59,7 +59,7 @@ const functions = [
     name: "get_financial_status",
     description: "Get current operating funds, revenue, and costs",
     parameters: {
-      type: SchemaType.OBJECT,
+      type: Type.OBJECT,
       properties: {},
       required: [],
     },
@@ -68,9 +68,9 @@ const functions = [
     name: "add_funds",
     description: "Add funds to the operating budget",
     parameters: {
-      type: SchemaType.OBJECT,
+      type: Type.OBJECT,
       properties: {
-        amount: { type: SchemaType.NUMBER, description: "Amount to add to budget" },
+        amount: { type: Type.NUMBER, description: "Amount to add to budget" },
       },
       required: ["amount"],
     },
@@ -79,7 +79,7 @@ const functions = [
     name: "get_ai_insights",
     description: "Get AI-generated insights about sales and inventory",
     parameters: {
-      type: SchemaType.OBJECT,
+      type: Type.OBJECT,
       properties: {},
       required: [],
     },
@@ -258,7 +258,9 @@ export async function registerRoutes(
     try {
       const existingInventory = await storage.getAllInventory();
       if (existingInventory.length === 0) {
-        await storage.bulkCreateInventory(initialInventory);
+        // Convert date strings to proper format for database
+        const inventoryWithoutTimestamp = initialInventory.map(({ lastRestocked, ...rest }) => rest);
+        await storage.bulkCreateInventory(inventoryWithoutTimestamp);
         
         const menuIngredients: any[] = [];
         initialMenu.forEach((item: any) => {
@@ -279,6 +281,7 @@ export async function registerRoutes(
       
       res.json({ success: true });
     } catch (error: any) {
+      console.error('Init error:', error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -515,7 +518,7 @@ You can help with inventory management, sales processing, financial tracking, an
         ],
         config: {
           tools: [{ functionDeclarations: functions }],
-          toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
+          toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
         },
       });
       

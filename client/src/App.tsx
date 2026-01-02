@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { StoreProvider } from "@/lib/store";
 import { Layout } from "@/components/layout/Sidebar";
 import { AIChatbot } from "@/components/layout/AIChatbot";
+import { DatabaseInit } from "@/components/DatabaseInit";
 
 import DashboardPage from "@/pages/dashboard";
 import InventoryPage from "@/pages/inventory";
@@ -31,11 +32,13 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <StoreProvider>
-        <Router />
-        <AIChatbot />
-        <Toaster />
-      </StoreProvider>
+      <DatabaseInit>
+        <StoreProvider>
+          <Router />
+          <AIChatbot />
+          <Toaster />
+        </StoreProvider>
+      </DatabaseInit>
     </QueryClientProvider>
   );
 }
