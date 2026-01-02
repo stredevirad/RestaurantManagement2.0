@@ -45,14 +45,41 @@ const functions = [
     },
   },
   {
-    name: "process_sale",
-    description: "Process a sale for a menu item",
+    name: "get_menu_item_details",
+    description: "Get detailed info about a specific menu item including ingredients, to help customer make allergy-aware choices",
     parameters: {
       type: Type.OBJECT,
       properties: {
-        menuItemId: { type: Type.STRING, description: "The menu item ID to sell" },
+        menuItemName: { type: Type.STRING, description: "The name of the menu item (partial match supported)" },
+      },
+      required: ["menuItemName"],
+    },
+  },
+  {
+    name: "process_order",
+    description: "Process a complete order after confirming allergies and modifications with the customer",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        menuItemId: { type: Type.STRING, description: "The menu item ID to order" },
+        customerName: { type: Type.STRING, description: "Customer's name (default: Walk-in)" },
+        allergies: { type: Type.STRING, description: "Customer's allergies if any" },
+        removedIngredients: { type: Type.STRING, description: "Comma-separated list of ingredients to remove" },
+        specialInstructions: { type: Type.STRING, description: "Any special instructions for the order" },
+        quantity: { type: Type.NUMBER, description: "Number of items (default: 1)" },
       },
       required: ["menuItemId"],
+    },
+  },
+  {
+    name: "get_recent_orders",
+    description: "Get recent orders for the live feed and AI insights",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        limit: { type: Type.NUMBER, description: "Number of orders to retrieve (default: 10)" },
+      },
+      required: [],
     },
   },
   {
@@ -108,9 +135,32 @@ function formatFunctionResult(functionName: string, result: any): string {
       if (result.error) return `Error: ${result.error}`;
       return `Restocked successfully!\n\n- Item: ${result.item}\n- New Quantity: ${result.newQuantity}\n- Cost: $${result.cost?.toFixed(2)}\n- Remaining Budget: $${result.remainingFunds?.toFixed(2)}`;
     
-    case "process_sale":
-      if (result.error) return `Could not process sale: ${result.error}`;
-      return `Order processed!\n\n- Item: ${result.item}\n- Price: $${result.price?.toFixed(2)}\n- New Budget: $${result.newFunds?.toFixed(2)}`;
+    case "get_menu_item_details":
+      if (result.error) return `Sorry, I couldn't find that menu item.`;
+      const ingredients = result.ingredients?.join(', ') || 'No ingredients listed';
+      return `**${result.name}** - $${result.price?.toFixed(2)}\n\n${result.description}\n\n**Ingredients:** ${ingredients}\n**Prep Time:** ${result.prepTime}\n\n💡 Before I place your order, do you have any allergies or would you like any ingredients removed?`;
+    
+    case "process_order":
+      if (result.error) return `Could not process order: ${result.error}`;
+      let orderSummary = `Order #${result.orderId} confirmed!\n\n`;
+      orderSummary += `- Item: ${result.item}${result.quantity > 1 ? ` x${result.quantity}` : ''}\n`;
+      orderSummary += `- Total: $${result.total?.toFixed(2)}\n`;
+      if (result.removedIngredients) orderSummary += `- Removed: ${result.removedIngredients}\n`;
+      if (result.specialInstructions) orderSummary += `- Notes: ${result.specialInstructions}\n`;
+      if (result.allergies) orderSummary += `- Allergies noted: ${result.allergies}\n`;
+      orderSummary += `\nYour order is being prepared. Thank you!`;
+      return orderSummary;
+    
+    case "get_recent_orders":
+      if (!result.orders || result.orders.length === 0) return "No recent orders found.";
+      let orderList = `Recent Orders (${result.orders.length}):\n\n`;
+      result.orders.forEach((o: any, i: number) => {
+        orderList += `${i + 1}. Order #${o.id} - $${o.total?.toFixed(2)} (${o.status})\n`;
+        o.items?.forEach((item: any) => {
+          orderList += `   - ${item.menuItemName}${item.removedIngredients ? ` (no ${item.removedIngredients})` : ''}\n`;
+        });
+      });
+      return orderList;
     
     case "add_funds":
       return `Funds added successfully!\n\n- Added: $${result.added?.toFixed(2)}\n- New Budget: $${result.newFunds?.toFixed(2)}`;
@@ -190,47 +240,140 @@ async function handleFunctionCall(functionName: string, args: any): Promise<any>
       };
     }
     
-    case "process_sale": {
+    case "get_menu_item_details": {
+      const searchName = args.menuItemName.toLowerCase();
+      const menuItem = menu.find(m => m.name.toLowerCase().includes(searchName));
+      if (!menuItem) return { error: "Menu item not found" };
+      
+      const ingredientIds = menuItem.ingredients.map(ing => ing.inventoryId);
+      const ingredientNames = await Promise.all(
+        ingredientIds.map(async (id) => {
+          const inv = await storage.getInventoryItem(id);
+          return inv?.name || 'Unknown';
+        })
+      );
+      
+      return {
+        id: menuItem.id,
+        name: menuItem.name,
+        description: menuItem.description,
+        price: menuItem.price,
+        prepTime: menuItem.prepTime,
+        category: menuItem.category,
+        ingredients: ingredientNames,
+        rating: menuItem.rating,
+      };
+    }
+    
+    case "process_order": {
       const menuItem = await storage.getMenuItem(args.menuItemId);
       if (!menuItem) return { error: "Menu item not found" };
       
       const ingredients = await storage.getMenuIngredients(args.menuItemId);
+      const quantity = args.quantity || 1;
       
-      // Check stock
+      // Check stock (only for ingredients not being removed)
+      const removedList = (args.removedIngredients || '').toLowerCase().split(',').map((s: string) => s.trim());
+      
       for (const ing of ingredients) {
         const invItem = await storage.getInventoryItem(ing.inventoryId);
-        if (!invItem || invItem.quantity < ing.quantity) {
-          return { error: `Insufficient ${invItem?.name || 'ingredient'}` };
+        if (!invItem) continue;
+        
+        // Skip removed ingredients
+        const isRemoved = removedList.some((r: string) => invItem.name.toLowerCase().includes(r));
+        if (isRemoved) continue;
+        
+        if (invItem.quantity < ing.quantity * quantity) {
+          return { error: `Insufficient ${invItem.name}` };
         }
       }
       
-      // Deduct inventory
+      // Deduct inventory (skip removed ingredients)
       for (const ing of ingredients) {
         const invItem = await storage.getInventoryItem(ing.inventoryId);
-        if (invItem) {
-          await storage.updateInventoryQuantity(ing.inventoryId, invItem.quantity - ing.quantity);
-        }
+        if (!invItem) continue;
+        
+        const isRemoved = removedList.some((r: string) => invItem.name.toLowerCase().includes(r));
+        if (isRemoved) continue;
+        
+        await storage.updateInventoryQuantity(ing.inventoryId, invItem.quantity - (ing.quantity * quantity));
       }
+      
+      // Calculate total
+      const total = menuItem.price * quantity;
       
       // Update funds
       const fundsStr = await storage.getSetting("operating_funds");
       const currentFunds = fundsStr ? parseFloat(fundsStr.value) : 5000;
-      const newFunds = currentFunds + menuItem.price;
+      const newFunds = currentFunds + total;
       await storage.updateSetting("operating_funds", newFunds.toString());
       
-      // Create log
+      // Create order in database
+      const order = await storage.createOrder(
+        { 
+          total, 
+          customerName: args.customerName || "Walk-in",
+          allergies: args.allergies || null,
+          status: "pending"
+        },
+        [{
+          orderId: 0,
+          menuItemId: args.menuItemId,
+          menuItemName: menuItem.name,
+          price: menuItem.price,
+          quantity,
+          removedIngredients: args.removedIngredients || null,
+          specialInstructions: args.specialInstructions || null,
+        }]
+      );
+      
+      // Create log for live feed
+      let logMessage = `Order #${order.id}: ${menuItem.name}`;
+      if (quantity > 1) logMessage += ` x${quantity}`;
+      if (args.removedIngredients) logMessage += ` (no ${args.removedIngredients})`;
+      if (args.customerName && args.customerName !== "Walk-in") logMessage += ` for ${args.customerName}`;
+      
       await storage.createLog({
         id: `log-${Date.now()}`,
         type: "sale",
-        message: `Sold ${menuItem.name}`,
-        amount: menuItem.price,
+        message: logMessage,
+        amount: total,
       });
       
       return {
         success: true,
+        orderId: order.id,
         item: menuItem.name,
-        price: menuItem.price,
+        quantity,
+        total,
+        customerName: args.customerName || "Walk-in",
+        allergies: args.allergies,
+        removedIngredients: args.removedIngredients,
+        specialInstructions: args.specialInstructions,
         newFunds,
+      };
+    }
+    
+    case "get_recent_orders": {
+      const limit = args.limit || 10;
+      const recentOrders = await storage.getRecentOrdersWithItems(limit);
+      
+      return {
+        orders: recentOrders.map(o => ({
+          id: o.id,
+          total: o.total,
+          customerName: o.customerName,
+          allergies: o.allergies,
+          status: o.status,
+          createdAt: o.createdAt,
+          items: o.items.map(item => ({
+            menuItemName: item.menuItemName,
+            price: item.price,
+            quantity: item.quantity,
+            removedIngredients: item.removedIngredients,
+            specialInstructions: item.specialInstructions,
+          })),
+        })),
       };
     }
     
@@ -491,6 +634,17 @@ export async function registerRoutes(
     }
   });
   
+  // Recent orders route for dashboard
+  app.get("/api/orders/recent", async (req: Request, res: Response) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      const orders = await storage.getRecentOrdersWithItems(limit);
+      res.json(orders);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Stats routes
   app.get("/api/stats", async (_req: Request, res: Response) => {
     try {
@@ -538,6 +692,8 @@ export async function registerRoutes(
       const operatingFunds = fundsStr ? parseFloat(fundsStr.value) : 5000;
       const lowStock = inventory.filter(item => item.quantity < item.threshold);
       
+      const menuItemsForContext = menu.map(m => `${m.name} (ID: ${m.id})`).join(', ');
+      
       const systemContext = `You are THALLIPOLI AI, a friendly and helpful assistant for a restaurant called THALLIPOLI. You speak in a warm, professional manner.
 
 CURRENT RESTAURANT STATUS:
@@ -546,13 +702,39 @@ CURRENT RESTAURANT STATUS:
 - Active Menu Items: ${menu.length}
 - Inventory Items: ${inventory.length}
 
+AVAILABLE MENU ITEMS (use these exact IDs when processing orders):
+${menuItemsForContext}
+
 CAPABILITIES:
 - Check inventory levels and low stock alerts
 - Restock items (deducts from budget)
-- Process sales and orders
+- Process orders with allergy checks
 - Check financial status (budget, revenue, costs)
 - Add funds to operating budget
 - Provide strategic insights
+- View recent orders
+
+ORDER FLOW - VERY IMPORTANT:
+When a customer wants to order something:
+1. First, use get_menu_item_details to show them the item's ingredients
+2. ASK the customer: "Do you have any allergies or would you like any ingredients removed?"
+3. WAIT for their response before processing the order
+4. Only after they confirm (even if they say "no allergies" or "none"), use process_order with their preferences
+5. Create proper orders that show up in the live feed
+
+EXAMPLE ORDER CONVERSATION:
+Customer: "I want to order a burger"
+You: [Call get_menu_item_details] "Great choice! Our Classic Cheeseburger ($12.99) contains:
+- Beef patty, Cheese, Lettuce, Tomato, Onion, Special sauce, Sesame bun
+
+Do you have any allergies or would you like any ingredients removed?"
+
+Customer: "No onions please, and I'm allergic to dairy"
+You: [Call process_order with removedIngredients: "onions" and allergies: "dairy"]
+"Got it! I've placed your order:
+- Classic Cheeseburger (no onions)
+- Allergy note: dairy
+Your order #1 is being prepared!"
 
 RESPONSE FORMATTING RULES - VERY IMPORTANT:
 1. NEVER return raw JSON or code to the user
@@ -560,19 +742,8 @@ RESPONSE FORMATTING RULES - VERY IMPORTANT:
 3. Use bullet points or numbered lists for multiple items
 4. Include relevant emojis to make responses engaging (sparingly)
 5. When reporting data, summarize it naturally in sentences
-6. For menu items, format as: "Item Name - $Price (Rating: X stars)"
-7. For inventory, format as: "Item Name: X units available"
-8. Keep responses concise but informative
-9. If an action was completed, confirm it clearly
-
-EXAMPLE GOOD RESPONSE for menu query:
-"Here are our top-rated dishes:
-- Chocolate Fudge Cake - $8.99 (4.9 stars) - A customer favorite!
-- Double Smash Burger - $18.99 (4.8 stars)
-- BBQ Bacon Burger - $15.99 (4.7 stars)"
-
-EXAMPLE BAD RESPONSE (never do this):
-{"totalItems":10,"topRated":[{"name":"Chocolate Fudge Cake"}]}
+6. Keep responses concise but informative
+7. If an action was completed, confirm it clearly
 
 Always be helpful and suggest related actions the user might want to take.`;
       

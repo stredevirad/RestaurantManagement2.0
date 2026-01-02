@@ -65,6 +65,9 @@ export const settings = pgTable("settings", {
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   total: real("total").notNull(),
+  customerName: text("customer_name").default("Walk-in"),
+  allergies: text("allergies"),
+  status: text("status").notNull().default("pending"), // pending, preparing, completed, cancelled
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -73,8 +76,11 @@ export const orderItems = pgTable("order_items", {
   id: serial("id").primaryKey(),
   orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
   menuItemId: varchar("menu_item_id").notNull().references(() => menuItems.id),
+  menuItemName: text("menu_item_name").notNull(),
+  price: real("price").notNull(),
   quantity: integer("quantity").notNull().default(1),
-  modifications: text("modifications"), // JSON string for add/remove
+  removedIngredients: text("removed_ingredients"), // comma-separated list
+  specialInstructions: text("special_instructions"),
 });
 
 // AI Conversations

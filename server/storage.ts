@@ -56,6 +56,9 @@ export interface IStorage {
   createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<Order>;
   getAllOrders(): Promise<Order[]>;
   getRecentOrders(limit: number): Promise<Order[]>;
+  getRecentOrdersWithItems(limit: number): Promise<(Order & { items: OrderItem[] })[]>;
+  getOrderItems(orderId: number): Promise<OrderItem[]>;
+  updateOrderStatus(orderId: number, status: string): Promise<Order | undefined>;
   
   // Stats
   getTotalRevenue(): Promise<number>;
@@ -198,6 +201,32 @@ class DatabaseStorage implements IStorage {
 
   async getRecentOrders(limit: number): Promise<Order[]> {
     return db.select().from(orders).orderBy(desc(orders.createdAt)).limit(limit);
+  }
+
+  async getRecentOrdersWithItems(limit: number): Promise<(Order & { items: OrderItem[] })[]> {
+    const recentOrders = await db.select().from(orders).orderBy(desc(orders.createdAt)).limit(limit);
+    
+    const ordersWithItems = await Promise.all(
+      recentOrders.map(async (order) => {
+        const items = await this.getOrderItems(order.id);
+        return { ...order, items };
+      })
+    );
+    
+    return ordersWithItems;
+  }
+
+  async getOrderItems(orderId: number): Promise<OrderItem[]> {
+    return db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+  }
+
+  async updateOrderStatus(orderId: number, status: string): Promise<Order | undefined> {
+    const [updated] = await db
+      .update(orders)
+      .set({ status })
+      .where(eq(orders.id, orderId))
+      .returning();
+    return updated;
   }
 
   // Stats
