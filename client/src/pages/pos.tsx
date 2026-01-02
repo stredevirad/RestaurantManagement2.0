@@ -37,7 +37,7 @@ export default function POSPage() {
   const [hoveredStar, setHoveredStar] = useState<number>(0);
   const [customizingItem, setCustomizingItem] = useState<string | null>(null);
   const [mods, setMods] = useState<{remove: string[], add: string[]}>({remove: [], add: []});
-  const [aiMessage, setAiMessage] = useState<string>("Welcome! I'm your ShelfSense AI. Need help choosing a dish based on current stock?");
+  const [aiMessage, setAiMessage] = useState<string>("Welcome! I'm your THALLIPOLI AI. Need help choosing a dish based on current stock?");
 
   const categories = Array.from(new Set(menu.map(item => item.category)));
 
@@ -81,7 +81,7 @@ export default function POSPage() {
               <Zap className="text-black h-5 w-5" />
             </div>
             <div className="flex-1">
-              <p className="text-[10px] font-black uppercase tracking-widest text-primary">ShelfSense AI Agent</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-primary">THALLIPOLI AI Agent</p>
               <p className="text-xs font-bold text-white line-clamp-2">{aiMessage}</p>
             </div>
             <Button size="sm" variant="ghost" onClick={askAi} className="hover:bg-primary/20">Ask</Button>

@@ -16,7 +16,7 @@ interface Message {
 export function AIChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { id: '1', role: 'assistant', content: "Hi! I'm ShelfSense AI. How can I help you navigate the kitchen today?" }
+    { id: '1', role: 'assistant', content: "Hi! I'm THALLIPOLI AI. How can I help you navigate the kitchen today?" }
   ]);
   const [input, setInput] = useState('');
   const [location, setLocation] = useLocation();
@@ -75,7 +75,7 @@ export function AIChatbot() {
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-lg">
                     <Bot className="h-5 w-5 text-primary" />
-                    ShelfSense AI
+                    THALLIPOLI AI
                   </CardTitle>
                   <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="h-8 w-8">
                     <X className="h-4 w-4" />

@@ -115,7 +115,7 @@ export default function InventoryPage() {
               <Zap className="text-primary h-5 w-5" />
             </div>
             <div className="flex-1">
-              <p className="text-[10px] font-black uppercase tracking-widest text-primary">ShelfSense AI Agent</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-primary">THALLIPOLI AI Agent</p>
               <p className="text-xs font-bold text-white leading-tight">{aiTip}</p>
             </div>
             <Button size="sm" variant="ghost" onClick={analyzeStock} className="hover:bg-primary/20">Analyze</Button>
