@@ -20,7 +20,9 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Plus, Search, AlertCircle } from "lucide-react";
+import { Plus, Search, AlertCircle, Zap } from "lucide-react";
+import { motion } from "framer-motion";
+import { Card } from "@/components/ui/card";
 import { useState } from "react";
 import { Label } from "@/components/ui/label";
 
