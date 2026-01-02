@@ -38,7 +38,7 @@ export default function DashboardPage() {
     >
       <motion.div variants={itemAnim} className="flex flex-col gap-2">
         <h2 className="text-5xl font-black tracking-tighter uppercase italic">
-          System <span className="text-primary">Pulse</span>
+          THALLIPOLI <span className="text-primary">MANAGEMENT</span>
         </h2>
         <p className="text-muted-foreground font-medium tracking-wide">AI-DRIVEN INVENTORY & REVENUE INTELLIGENCE</p>
       </motion.div>

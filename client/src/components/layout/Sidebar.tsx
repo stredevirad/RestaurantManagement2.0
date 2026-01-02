@@ -28,7 +28,7 @@ export function Sidebar() {
           </div>
           <div>
             <h1 className="text-lg font-black tracking-tighter leading-none">
-              SHELF<span className="text-primary">SENSE</span>
+              THALLIPOLI
             </h1>
             <p className="text-[10px] text-muted-foreground font-bold tracking-[0.2em] mt-1">AGENT V1.0</p>
           </div>
