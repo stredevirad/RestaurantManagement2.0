@@ -14,7 +14,9 @@ export interface InventoryItem {
 export interface MenuItem {
   id: string;
   name: string;
+  description: string;
   price: number; // Selling price
+  prepTime: string;
   category: 'main' | 'appetizer' | 'dessert' | 'drink';
   ingredients: {
     inventoryId: string;
@@ -22,12 +24,13 @@ export interface MenuItem {
   }[];
   rating: number; // Current average rating
   ratingCount: number;
+  chef?: string;
 }
 
 export interface LogEntry {
   id: string;
   timestamp: string;
-  type: 'sale' | 'restock' | 'waste' | 'system';
+  type: 'sale' | 'restock' | 'waste' | 'system' | 'email';
   message: string;
   amount?: number; // Financial impact (positive for sale, negative for restock/waste)
 }
@@ -46,10 +49,12 @@ export const initialMenu: MenuItem[] = [
   {
     id: 'menu-1',
     name: 'Classic Cheeseburger',
+    description: 'Juicy 200g beef patty with melted cheddar, fresh lettuce, and tomatoes on a toasted brioche bun.',
     price: 14.99,
+    prepTime: '12 min',
     category: 'main',
     ingredients: [
-      { inventoryId: 'inv-1', quantity: 0.2 }, // 200g beef
+      { inventoryId: 'inv-1', quantity: 0.2 },
       { inventoryId: 'inv-2', quantity: 1 },
       { inventoryId: 'inv-3', quantity: 2 },
       { inventoryId: 'inv-4', quantity: 0.1 },
@@ -57,11 +62,14 @@ export const initialMenu: MenuItem[] = [
     ],
     rating: 4.5,
     ratingCount: 120,
+    chef: 'Chef Marco',
   },
   {
     id: 'menu-2',
     name: 'Double Smash Burger',
+    description: 'Two smashed patties for maximum crust, triple cheese, and secret sauce.',
     price: 18.99,
+    prepTime: '15 min',
     category: 'main',
     ingredients: [
       { inventoryId: 'inv-1', quantity: 0.3 },
@@ -70,17 +78,21 @@ export const initialMenu: MenuItem[] = [
     ],
     rating: 4.8,
     ratingCount: 85,
+    chef: 'Chef Sarah',
   },
   {
     id: 'menu-3',
     name: 'Crispy Fries',
+    description: 'Hand-cut russet potatoes, double fried for ultimate crunch.',
     price: 5.99,
+    prepTime: '8 min',
     category: 'appetizer',
     ingredients: [
       { inventoryId: 'inv-6', quantity: 0.3 },
-      { inventoryId: 'inv-7', quantity: 0.1 }, // Oil usage approx
+      { inventoryId: 'inv-7', quantity: 0.1 },
     ],
     rating: 4.2,
     ratingCount: 200,
+    chef: 'Chef Leo',
   },
 ];

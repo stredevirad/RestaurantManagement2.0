@@ -37,6 +37,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       amount
     };
     setLogs(prev => [newLog, ...prev]);
+
+    // Simulated email trigger
+    if (type === 'email' || message.toLowerCase().includes('low stock') || message.toLowerCase().includes('depleted')) {
+      toast({
+        title: "Email Notification Sent",
+        description: `Stock Manager notified: ${message}`,
+      });
+    }
   };
 
   const getLowStockItems = () => {
@@ -46,10 +54,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // Automated detection of low stock - Check whenever inventory changes
   useEffect(() => {
     const lowStock = getLowStockItems();
-    if (lowStock.length > 0) {
-      // In a real app, this would debounce or check if alert already sent today
-      // For demo, we just log it conceptually or show a toast if it's a new critical low
-    }
+    lowStock.forEach(item => {
+      const isDepleted = item.quantity <= 0;
+      const status = isDepleted ? 'DEPLETED' : 'LOW STOCK';
+      
+      // Prevent duplicate logs for the same state in a single session
+      setLogs(currentLogs => {
+        const hasRecentLog = currentLogs.slice(0, 5).some(l => 
+          l.message.includes(item.name) && l.message.includes(status)
+        );
+        
+        if (!hasRecentLog) {
+          addLog('email', `ALERT: ${item.name} is ${status} (${item.quantity.toFixed(2)} ${item.unit} remaining)`);
+        }
+        return currentLogs;
+      });
+    });
   }, [inventory]);
 
   const restockItem = (id: string, amount: number) => {
@@ -64,6 +84,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     
     setTotalCost(prev => prev + cost);
     addLog('restock', `Replenished ${amount}${item.unit} of ${item.name}`, -cost);
+    addLog('email', `RESTOCK NOTIFICATION: ${item.name} has been replenished by ${amount} ${item.unit}`);
     
     toast({
       title: "Stock Replenished",
@@ -148,6 +169,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   const submitRating = (menuItemId: string, rating: number) => {
+    const menuItem = menu.find(m => m.id === menuItemId);
+    if (!menuItem) return;
+
     setMenu(prev => prev.map(item => {
       if (item.id === menuItemId) {
         const newCount = item.ratingCount + 1;
@@ -156,7 +180,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       return item;
     }));
-    addLog('system', `New rating for ${menu.find(m => m.id === menuItemId)?.name}: ${rating}/5`);
+
+    // Demand-based re-supply logic: Increase threshold if rating is high
+    if (rating >= 4) {
+      setInventory(prev => prev.map(invItem => {
+        const isIngredient = menuItem.ingredients.some(ing => ing.inventoryId === invItem.id);
+        if (isIngredient) {
+          // Increase threshold to maintain higher buffer for high-demand items
+          return { ...invItem, threshold: Math.ceil(invItem.threshold * 1.05) };
+        }
+        return invItem;
+      }));
+      addLog('system', `High rating (${rating}/5) for ${menuItem.name}. Adjusting ingredient safety thresholds for increased demand.`);
+    }
+
+    addLog('system', `New rating for ${menuItem.name} (Chef: ${menuItem.chef}): ${rating}/5`);
   };
 
   return (
