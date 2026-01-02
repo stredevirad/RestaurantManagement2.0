@@ -4,6 +4,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShoppingCart, Star, Clock, Info } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Tooltip,
   TooltipContent,
@@ -23,28 +24,33 @@ import { useState } from "react";
 export default function POSPage() {
   const { menu, processSale, inventory, submitRating } = useStore();
   const [ratingItem, setRatingItem] = useState<string | null>(null);
+  const [hoveredStar, setHoveredStar] = useState<number>(0);
 
   const categories = Array.from(new Set(menu.map(item => item.category)));
 
   return (
-    <div className="space-y-8 h-full">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8 h-full pb-20">
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center justify-between"
+      >
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Point of Sale</h2>
-          <p className="text-muted-foreground">Process customer orders and deduct inventory automatically.</p>
+          <h2 className="text-4xl font-black tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Point of Sale</h2>
+          <p className="text-muted-foreground mt-2">Precision inventory subtraction for every gourmet order.</p>
         </div>
-        <Button variant="outline" className="gap-2">
+        <Button variant="outline" className="gap-2 rounded-full border-primary/20 hover:bg-primary/10">
           <ShoppingCart className="h-4 w-4" /> View Current Order
         </Button>
-      </div>
+      </motion.div>
 
       <Tabs defaultValue={categories[0]} className="w-full">
-        <TabsList className="w-full justify-start h-auto p-1 bg-muted/50 mb-6">
+        <TabsList className="w-full justify-start h-auto p-1 bg-muted/20 mb-10 border border-white/5 rounded-2xl">
           {categories.map(category => (
             <TabsTrigger 
               key={category} 
               value={category}
-              className="px-8 py-3 capitalize text-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="px-8 py-4 capitalize text-sm font-bold tracking-widest data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-xl transition-all duration-300"
             >
               {category}
             </TabsTrigger>
@@ -52,87 +58,114 @@ export default function POSPage() {
         </TabsList>
         
         {categories.map(category => (
-          <TabsContent key={category} value={category} className="mt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {menu.filter(item => item.category === category).map(item => (
-                <Card key={item.id} className="flex flex-col hover:border-primary/50 transition-colors cursor-pointer group">
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <CardTitle className="text-xl">{item.name}</CardTitle>
-                      <Badge variant="secondary" className="font-mono text-base bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20">
-                        ${item.price.toFixed(2)}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="flex-1 space-y-4" onClick={() => processSale(item.id)}>
-                    <p className="text-xs text-muted-foreground line-clamp-2">{item.description}</p>
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1 text-yellow-500">
-                        <Star className="h-4 w-4 fill-current" />
-                        <span className="font-medium">{item.rating.toFixed(1)}</span>
-                        <span className="text-muted-foreground text-xs">({item.ratingCount})</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-muted-foreground text-xs">
-                        <Clock className="h-3 w-3" />
-                        {item.prepTime}
-                      </div>
-                    </div>
-
-                    <div className="pt-2 border-t flex flex-wrap gap-1">
-                      {item.ingredients.map(ing => {
-                        const invName = inventory.find(inv => inv.id === ing.inventoryId)?.name || 'Unknown';
-                        return (
-                          <Badge key={ing.inventoryId} variant="outline" className="text-[10px] py-0 px-1 opacity-70">
-                            {invName}
+          <TabsContent key={category} value={category} className="mt-0 outline-none">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+              <AnimatePresence mode="popLayout">
+                {menu.filter(item => item.category === category).map((item, index) => (
+                  <motion.div
+                    key={item.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    whileHover={{ y: -5 }}
+                  >
+                    <Card className="flex flex-col h-full bg-card/40 backdrop-blur-xl border-white/5 hover:border-primary/50 transition-all duration-500 rounded-3xl overflow-hidden group shadow-2xl">
+                      <CardHeader className="p-6">
+                        <div className="flex justify-between items-start gap-4">
+                          <CardTitle className="text-2xl font-bold tracking-tight group-hover:text-primary transition-colors">{item.name}</CardTitle>
+                          <Badge variant="secondary" className="font-mono text-lg py-1 px-3 bg-primary/10 text-primary border border-primary/20 rounded-xl">
+                            ${item.price.toFixed(2)}
                           </Badge>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                  <CardFooter className="bg-muted/30 border-t p-4 flex gap-2">
-                    <Button 
-                      className="flex-1 group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
-                      onClick={() => processSale(item.id)}
-                    >
-                      Order
-                    </Button>
-                    
-                    <Dialog open={ratingItem === item.id} onOpenChange={(open) => setRatingItem(open ? item.id : null)}>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="icon" title="Rate this dish">
-                          <Star className="h-4 w-4" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Rate {item.name}</DialogTitle>
-                          <p className="text-sm text-muted-foreground">Cooked by {item.chef}</p>
-                        </DialogHeader>
-                        <div className="flex justify-center gap-4 py-8">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <Button
-                              key={star}
-                              variant="ghost"
-                              size="lg"
-                              className="text-yellow-500 hover:scale-110"
-                              onClick={() => {
-                                submitRating(item.id, star);
-                                setRatingItem(null);
-                              }}
-                            >
-                              <Star className={`h-8 w-8 ${star <= Math.round(item.rating) ? 'fill-current' : ''}`} />
-                            </Button>
-                          ))}
                         </div>
-                        <DialogFooter className="text-xs text-muted-foreground text-center">
-                          High ratings increase ingredient stock thresholds to meet demand.
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </CardFooter>
-                </Card>
-              ))}
+                      </CardHeader>
+                      <CardContent className="px-6 flex-1 space-y-6">
+                        <p className="text-sm text-muted-foreground/80 leading-relaxed font-medium line-clamp-3">{item.description}</p>
+                        
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/10 rounded-full border border-yellow-500/20">
+                            <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+                            <span className="font-bold text-yellow-500 text-sm">{item.rating.toFixed(1)}</span>
+                            <span className="text-yellow-500/60 text-[10px] font-bold">({item.ratingCount})</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-muted-foreground font-mono text-xs">
+                            <Clock className="h-4 w-4 text-primary" />
+                            {item.prepTime}
+                          </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-white/5 flex flex-wrap gap-2">
+                          {item.ingredients.map(ing => {
+                            const invName = inventory.find(inv => inv.id === ing.inventoryId)?.name || 'Unknown';
+                            return (
+                              <Badge key={ing.inventoryId} variant="outline" className="text-[10px] uppercase tracking-tighter py-0.5 px-2 bg-white/5 border-white/10 opacity-60">
+                                {invName}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                      <CardFooter className="p-6 bg-white/5 flex gap-3">
+                        <Button 
+                          className="flex-1 h-12 rounded-2xl font-bold tracking-widest text-xs uppercase shadow-lg shadow-primary/20 active:scale-95 transition-all"
+                          onClick={() => processSale(item.id)}
+                        >
+                          Order Now
+                        </Button>
+                        
+                        <Dialog open={ratingItem === item.id} onOpenChange={(open) => {
+                          setRatingItem(open ? item.id : null);
+                          setHoveredStar(0);
+                        }}>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-12 w-12 rounded-2xl border-white/10 hover:bg-yellow-500/10 hover:text-yellow-500 hover:border-yellow-500/50">
+                              <Star className="h-5 w-5" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="rounded-[2.5rem] bg-card/95 backdrop-blur-2xl border-white/10 max-w-sm">
+                            <DialogHeader className="items-center text-center">
+                              <div className="w-16 h-16 bg-primary/10 rounded-3xl flex items-center justify-center mb-4">
+                                <Star className="h-8 w-8 text-primary fill-primary" />
+                              </div>
+                              <DialogTitle className="text-3xl font-black italic">RATE IT</DialogTitle>
+                              <p className="text-muted-foreground font-medium mt-1">Gourmet experience by {item.chef}</p>
+                            </DialogHeader>
+                            <div className="flex justify-center gap-2 py-10">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <motion.button
+                                  key={star}
+                                  whileHover={{ scale: 1.2, rotate: 15 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onMouseEnter={() => setHoveredStar(star)}
+                                  onMouseLeave={() => setHoveredStar(0)}
+                                  onClick={() => {
+                                    submitRating(item.id, star);
+                                    setRatingItem(null);
+                                  }}
+                                  className="p-1 focus:outline-none transition-colors"
+                                >
+                                  <Star 
+                                    className={`h-10 w-10 transition-all duration-200 ${
+                                      (hoveredStar >= star) 
+                                        ? 'fill-yellow-500 text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]' 
+                                        : 'text-muted-foreground/20 fill-none'
+                                    }`} 
+                                  />
+                                </motion.button>
+                              ))}
+                            </div>
+                            <DialogFooter className="justify-center sm:justify-center">
+                              <p className="text-[10px] text-center font-bold tracking-widest uppercase text-muted-foreground/60 max-w-[200px]">
+                                Your feedback optimizes our ingredient supply chain.
+                              </p>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      </CardFooter>
+                    </Card>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             </div>
           </TabsContent>
         ))}
