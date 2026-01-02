@@ -86,6 +86,43 @@ const functions = [
   },
 ];
 
+// Fallback function to format results nicely if AI fails
+function formatFunctionResult(functionName: string, result: any): string {
+  switch (functionName) {
+    case "get_inventory_status":
+      const lowItems = result.lowStockItems || [];
+      if (lowItems.length === 0) {
+        return `Great news! All inventory levels are healthy. You have ${result.totalItems} items with a total value of $${result.totalValue?.toFixed(2) || '0.00'}.`;
+      }
+      return `Inventory Alert!\n\nLow stock items:\n${lowItems.map((i: any) => `- ${i.name}: ${i.quantity} ${i.unit} (threshold: ${i.threshold})`).join('\n')}\n\nTotal inventory value: $${result.totalValue?.toFixed(2) || '0.00'}`;
+    
+    case "get_menu_info":
+      const topItems = result.topRated || [];
+      return `Menu Overview\n\nWe have ${result.totalItems} items across ${Object.keys(result.categories || {}).length} categories.\n\nTop Rated:\n${topItems.map((m: any) => `- ${m.name} - $${m.price} (${m.rating} stars)`).join('\n')}`;
+    
+    case "get_financial_status":
+      const status = result.status === 'critical' ? 'Low funds - restock carefully!' : 'Healthy';
+      return `Financial Summary\n\n- Operating Budget: $${result.operatingFunds?.toFixed(2) || '0.00'}\n- Total Revenue: $${result.totalRevenue?.toFixed(2) || '0.00'}\n- Total Costs: $${result.totalCost?.toFixed(2) || '0.00'}\n- Net Profit: $${result.netProfit?.toFixed(2) || '0.00'}\n\nStatus: ${status}`;
+    
+    case "restock_item":
+      if (result.error) return `Error: ${result.error}`;
+      return `Restocked successfully!\n\n- Item: ${result.item}\n- New Quantity: ${result.newQuantity}\n- Cost: $${result.cost?.toFixed(2)}\n- Remaining Budget: $${result.remainingFunds?.toFixed(2)}`;
+    
+    case "process_sale":
+      if (result.error) return `Could not process sale: ${result.error}`;
+      return `Order processed!\n\n- Item: ${result.item}\n- Price: $${result.price?.toFixed(2)}\n- New Budget: $${result.newFunds?.toFixed(2)}`;
+    
+    case "add_funds":
+      return `Funds added successfully!\n\n- Added: $${result.added?.toFixed(2)}\n- New Budget: $${result.newFunds?.toFixed(2)}`;
+    
+    case "get_ai_insights":
+      return `Strategic Insights\n\n- Recent Orders: ${result.recentOrderCount}\n- Low Stock Items: ${result.lowStockCount}\n${result.lowStockItems?.length > 0 ? `- Items needing attention: ${result.lowStockItems.join(', ')}` : ''}\n- Top Sellers: ${result.topMenuItems?.join(', ') || 'N/A'}`;
+    
+    default:
+      return "Action completed successfully.";
+  }
+}
+
 // Function handlers
 async function handleFunctionCall(functionName: string, args: any): Promise<any> {
   const inventory = await storage.getAllInventory();
@@ -501,14 +538,43 @@ export async function registerRoutes(
       const operatingFunds = fundsStr ? parseFloat(fundsStr.value) : 5000;
       const lowStock = inventory.filter(item => item.quantity < item.threshold);
       
-      const systemContext = `You are THALLIPOLI AI, an intelligent assistant for a restaurant management system. 
-Current Status:
-- Operating Funds: $${operatingFunds.toFixed(2)}
-- Low Stock Items: ${lowStock.length} (${lowStock.map(i => i.name).join(', ')})
-- Menu Items: ${menu.length}
-- Total Inventory Items: ${inventory.length}
+      const systemContext = `You are THALLIPOLI AI, a friendly and helpful assistant for a restaurant called THALLIPOLI. You speak in a warm, professional manner.
 
-You can help with inventory management, sales processing, financial tracking, and strategic insights. Use the available functions to interact with the system.`;
+CURRENT RESTAURANT STATUS:
+- Operating Budget: $${operatingFunds.toFixed(2)}
+- Low Stock Alerts: ${lowStock.length > 0 ? lowStock.map(i => i.name).join(', ') : 'None - all stock levels healthy'}
+- Active Menu Items: ${menu.length}
+- Inventory Items: ${inventory.length}
+
+CAPABILITIES:
+- Check inventory levels and low stock alerts
+- Restock items (deducts from budget)
+- Process sales and orders
+- Check financial status (budget, revenue, costs)
+- Add funds to operating budget
+- Provide strategic insights
+
+RESPONSE FORMATTING RULES - VERY IMPORTANT:
+1. NEVER return raw JSON or code to the user
+2. Always format responses in a friendly, readable way
+3. Use bullet points or numbered lists for multiple items
+4. Include relevant emojis to make responses engaging (sparingly)
+5. When reporting data, summarize it naturally in sentences
+6. For menu items, format as: "Item Name - $Price (Rating: X stars)"
+7. For inventory, format as: "Item Name: X units available"
+8. Keep responses concise but informative
+9. If an action was completed, confirm it clearly
+
+EXAMPLE GOOD RESPONSE for menu query:
+"Here are our top-rated dishes:
+- Chocolate Fudge Cake - $8.99 (4.9 stars) - A customer favorite!
+- Double Smash Burger - $18.99 (4.8 stars)
+- BBQ Bacon Burger - $15.99 (4.7 stars)"
+
+EXAMPLE BAD RESPONSE (never do this):
+{"totalItems":10,"topRated":[{"name":"Chocolate Fudge Cake"}]}
+
+Always be helpful and suggest related actions the user might want to take.`;
       
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
@@ -534,6 +600,8 @@ You can help with inventory management, sales processing, financial tracking, an
               part.functionCall.args
             );
             
+            const formatInstruction = `Based on this function result, provide a clear, friendly response to the user. Format nicely with bullet points if listing items. NEVER show raw JSON - always convert data into natural language sentences.`;
+            
             const followUp = await ai.models.generateContent({
               model: "gemini-2.5-flash",
               contents: [
@@ -549,10 +617,11 @@ You can help with inventory management, sales processing, financial tracking, an
                     },
                   }],
                 },
+                { role: "user", parts: [{ text: formatInstruction }] },
               ],
             });
             
-            finalResponse = followUp.text || JSON.stringify(functionResult);
+            finalResponse = followUp.text || formatFunctionResult(part.functionCall.name, functionResult);
           } else if (part.text) {
             finalResponse += part.text;
           }
