@@ -40,7 +40,7 @@ export default function DashboardPage() {
         <h2 className="text-5xl font-black tracking-tighter uppercase italic">
           THALLIPOLI <span className="text-primary">MANAGEMENT</span>
         </h2>
-        <p className="text-muted-foreground font-medium tracking-wide">AI-DRIVEN INVENTORY & REVENUE INTELLIGENCE</p>
+        <p className="text-muted-foreground font-medium tracking-wide">(MADE BY THE THALLIPOLI BOYS)</p>
       </motion.div>
 
       {/* KPI Cards */}
