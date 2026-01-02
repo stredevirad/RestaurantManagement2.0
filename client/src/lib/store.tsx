@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { InventoryItem, MenuItem, LogEntry, initialInventory, initialMenu } from './mockData';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -27,6 +27,7 @@ interface StoreContextType {
   addFunds: (amount: number) => void;
   operatingFunds: number;
   realtimeInsights: string[];
+  refreshData: () => void;
 }
 
 export interface CartItem {
@@ -44,11 +45,77 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalCost, setTotalCost] = useState(0);
-  const [operatingFunds, setOperatingFunds] = useState(5000); // Initial budget
+  const [operatingFunds, setOperatingFunds] = useState(5000);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [realtimeInsights, setRealtimeInsights] = useState<string[]>([]);
   const [orderBuffer, setOrderBuffer] = useState<{items: string[], total: number}[]>([]);
+  const [lastLogCount, setLastLogCount] = useState(0);
   const { toast } = useToast();
+
+  // Fetch data from API
+  const refreshData = useCallback(async () => {
+    try {
+      const [inventoryRes, menuRes, logsRes, statsRes] = await Promise.all([
+        fetch('/api/inventory'),
+        fetch('/api/menu'),
+        fetch('/api/logs'),
+        fetch('/api/stats'),
+      ]);
+      
+      if (inventoryRes.ok) {
+        const data = await inventoryRes.json();
+        setInventory(data);
+      }
+      if (menuRes.ok) {
+        const data = await menuRes.json();
+        setMenu(data);
+      }
+      if (logsRes.ok) {
+        const data = await logsRes.json();
+        // Check for new orders from chatbot and generate insights
+        if (data.length > lastLogCount) {
+          const newLogs = data.slice(0, data.length - lastLogCount);
+          const newSales = newLogs.filter((l: LogEntry) => l.type === 'sale');
+          
+          if (newSales.length > 0) {
+            // Generate AI insight for new chatbot orders
+            const latestSale = newSales[0];
+            if (latestSale.message.includes('Order #')) {
+              const insight = `AI CHATBOT: ${latestSale.message} - $${latestSale.amount?.toFixed(2)} revenue added`;
+              setRealtimeInsights(prev => [insight, ...prev].slice(0, 10));
+            }
+          }
+          setLastLogCount(data.length);
+        }
+        setLogs(data);
+      }
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setOperatingFunds(data.operatingFunds);
+        setTotalRevenue(data.totalRevenue);
+        setTotalCost(data.totalCost);
+        
+        // Add low stock warning to insights
+        if (data.operatingFunds < 1000) {
+          setRealtimeInsights(prev => {
+            if (!prev.includes("CRITICAL: Operating funds low (<$1000). Restock carefully.")) {
+              return ["CRITICAL: Operating funds low (<$1000). Restock carefully.", ...prev].slice(0, 10);
+            }
+            return prev;
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to refresh data:', error);
+    }
+  }, [lastLogCount]);
+
+  // Initial data fetch and polling
+  useEffect(() => {
+    refreshData();
+    const interval = setInterval(refreshData, 3000); // Refresh every 3 seconds
+    return () => clearInterval(interval);
+  }, [refreshData]);
 
   const addToCart = (menuItemId: string, modifications: { remove: string[], add: string[] }) => {
     const newItem: CartItem = {
@@ -425,7 +492,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       getChefPerformance,
       addFunds,
       operatingFunds,
-      realtimeInsights
+      realtimeInsights,
+      refreshData
     }}>
       {children}
     </StoreContext.Provider>
