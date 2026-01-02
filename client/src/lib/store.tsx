@@ -47,6 +47,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [operatingFunds, setOperatingFunds] = useState(5000); // Initial budget
   const [cart, setCart] = useState<CartItem[]>([]);
   const [realtimeInsights, setRealtimeInsights] = useState<string[]>([]);
+  const [orderBuffer, setOrderBuffer] = useState<{items: string[], total: number}[]>([]);
   const { toast } = useToast();
 
   const addToCart = (menuItemId: string, modifications: { remove: string[], add: string[] }) => {
@@ -83,7 +84,42 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (successCount > 0) {
       setCart([]);
       
-      // Generate AI Real-time Insight
+      // Add current order to buffer for analysis
+      const orderTotal = cart.reduce((sum, item) => {
+        const m = menu.find(i => i.id === item.menuItemId);
+        return sum + (m?.price || 0) * item.quantity;
+      }, 0);
+      
+      const orderItems = cart.map(item => {
+         const m = menu.find(i => i.id === item.menuItemId);
+         return m?.name || 'Unknown';
+      });
+
+      setOrderBuffer(prev => {
+        const newBuffer = [...prev, { items: orderItems, total: orderTotal }];
+        
+        if (newBuffer.length >= 10) {
+           // ANALYZE BATCH
+           const totalSales = newBuffer.reduce((sum, o) => sum + o.total, 0);
+           const avgOrder = totalSales / newBuffer.length;
+           
+           // Find top selling item
+           const itemCounts: Record<string, number> = {};
+           newBuffer.flatMap(o => o.items).forEach(item => {
+             itemCounts[item] = (itemCounts[item] || 0) + 1;
+           });
+           const topItem = Object.entries(itemCounts).sort((a,b) => b[1] - a[1])[0];
+           
+           // Generate detailed insight
+           const insight = `BATCH ANALYSIS (Last 10 Orders): Avg Order Value: $${avgOrder.toFixed(2)}. Top Seller: ${topItem ? topItem[0] : 'None'} (${topItem ? topItem[1] : 0} sold). Restock priority: ${topItem ? topItem[0] : 'None'} ingredients.`;
+           
+           setRealtimeInsights(prevInsights => [insight, ...prevInsights].slice(0, 5));
+           return []; // Clear buffer
+        }
+        return newBuffer;
+      });
+
+      // Generate AI Real-time Insight (Keep random one for immediate feedback too, or remove if too noisy)
       const randomInsight = [
         "Insight: High demand for burgers detected. Prepare more patties.",
         "Insight: Salad orders increasing. Ensure lettuce is prepped.",
@@ -314,6 +350,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         const ing = menuItem.ingredients.find(i => i.inventoryId === item.id);
         return ing ? { ...item, quantity: Math.max(0, item.quantity - ing.quantity) } : item;
       }));
+      
+      const wasteInsight = `LOSS ALERT: Waste recorded for ${menuItem.name}. Reason: ${reason}. Ingredients re-allocated. Cost Impact: Negligible (Stock available).`;
+      setRealtimeInsights(prev => [wasteInsight, ...prev].slice(0, 5));
+
       addLog('waste', `Chef reported failure on ${menuItem.name}: ${reason}. Ingredients re-allocated for remake.`, 0);
       toast({
         variant: "destructive",
@@ -321,6 +361,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         description: `Ingredients for ${menuItem.name} deducted again. Reason: ${reason}`,
       });
     } else {
+      const missingText = missingIngredients.length > 0 ? ` Missing: ${missingIngredients.join(', ')}` : '';
+      const wasteInsight = `LOSS ALERT: Waste recorded for ${menuItem.name}. Reason: ${reason}.${missingText} Revenue Opportunity Lost: $${menuItem.price.toFixed(2)}`;
+      
+      setRealtimeInsights(prev => [wasteInsight, ...prev].slice(0, 5));
+
       addLog('waste', `Chef reported failure on ${menuItem.name}, but insufficient stock to remake! Missing: ${missingIngredients.join(', ')}`, 0);
        toast({
         variant: "destructive",
