@@ -18,7 +18,7 @@ interface StoreContextType {
   cart: CartItem[];
 
   restockItem: (id: string, amount: number) => void;
-  processSale: (menuItemId: string, modifications?: { remove: string[], add: string[] }) => boolean;
+  processSale: (menuItemId: string, modifications?: { remove: string[], add: string[] }) => Promise<boolean>;
   recordWaste: (menuItemId: string, reason: string) => void;
   submitRating: (menuItemId: string, rating: number) => void;
   getLowStockItems: () => InventoryItem[];
@@ -139,19 +139,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setCart([]);
   };
 
-  const checkout = () => {
+  const checkout = async () => {
     if (cart.length === 0) return;
     
-    let successCount = 0;
-    cart.forEach(item => {
-      const success = processSale(item.menuItemId, item.modifications);
-      if (success) successCount++;
-    });
+    // Process all items and wait for all results
+    const results = await Promise.all(
+      cart.map(item => processSale(item.menuItemId, item.modifications))
+    );
+    
+    const successCount = results.filter(Boolean).length;
 
     if (successCount > 0) {
-      setCart([]);
-      
-      // Add current order to buffer for analysis
+      // Store cart data before clearing
       const orderTotal = cart.reduce((sum, item) => {
         const m = menu.find(i => i.id === item.menuItemId);
         return sum + (m?.price || 0) * item.quantity;
@@ -161,6 +160,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
          const m = menu.find(i => i.id === item.menuItemId);
          return m?.name || 'Unknown';
       });
+
+      setCart([]);
 
       setOrderBuffer(prev => {
         const newBuffer = [...prev, { items: orderItems, total: orderTotal }];
@@ -186,7 +187,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return newBuffer;
       });
 
-      // Generate AI Real-time Insight (Keep random one for immediate feedback too, or remove if too noisy)
+      // Generate AI Real-time Insight
       const randomInsight = [
         "Insight: High demand for burgers detected. Prepare more patties.",
         "Insight: Salad orders increasing. Ensure lettuce is prepped.",
@@ -261,13 +262,34 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const addFunds = (amount: number) => {
-    setOperatingFunds(prev => prev + amount);
-    addLog('system', `Funds Added: $${amount.toFixed(2)}`);
-    toast({
-      title: "Funds Added",
-      description: `$${amount.toFixed(2)} added to operating budget.`,
-    });
+  const addFunds = async (amount: number) => {
+    try {
+      const res = await fetch('/api/funds/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount }),
+      });
+      
+      if (res.ok) {
+        toast({
+          title: "Funds Added",
+          description: `$${amount.toFixed(2)} added to operating budget.`,
+        });
+        refreshData();
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Failed",
+          description: "Could not add funds.",
+        });
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to connect to server.",
+      });
+    }
   };
 
   const addLog = (type: LogEntry['type'], message: string, amount: number = 0) => {
@@ -314,7 +336,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
   }, [inventory]);
 
-  const restockItem = (id: string, amount: number) => {
+  const restockItem = async (id: string, amount: number) => {
     const item = inventory.find(i => i.id === id);
     if (!item) return;
 
@@ -329,68 +351,84 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setOperatingFunds(prev => prev - cost);
-    
-    setInventory(prev => prev.map(i => 
-      i.id === id ? { ...i, quantity: i.quantity + amount, lastRestocked: new Date().toISOString() } : i
-    ));
-    
-    setTotalCost(prev => prev + cost);
-    addLog('restock', `Replenished ${amount}${item.unit} of ${item.name}`, -cost);
-    addLog('email', `RESTOCK NOTIFICATION: ${item.name} has been replenished by ${amount} ${item.unit}`);
-    
-    toast({
-      title: "Stock Replenished",
-      description: `Added ${amount}${item.unit} to ${item.name}. Register updated.`,
-    });
+    try {
+      const res = await fetch('/api/inventory/restock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: id, quantity: amount }),
+      });
+      
+      if (res.ok) {
+        toast({
+          title: "Stock Replenished",
+          description: `Added ${amount}${item.unit} to ${item.name}. Register updated.`,
+        });
+        refreshData();
+      } else {
+        const error = await res.json();
+        toast({
+          variant: "destructive",
+          title: "Restock Failed",
+          description: error.message || "Failed to restock item.",
+        });
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to connect to server.",
+      });
+    }
   };
 
-  const processSale = (menuItemId: string, modifications?: { remove: string[], add: string[] }): boolean => {
+  const processSale = async (menuItemId: string, modifications?: { remove: string[], add: string[] }): Promise<boolean> => {
     const menuItem = menu.find(m => m.id === menuItemId);
     if (!menuItem) return false;
 
-    // Check availability
-    const canMake = menuItem.ingredients.every(ing => {
-      const invItem = inventory.find(i => i.id === ing.inventoryId);
-      return invItem && invItem.quantity >= ing.quantity;
-    });
-
-    if (!canMake) {
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          menuItemId,
+          customerName: 'POS Order',
+          allergies: '',
+          removedIngredients: modifications?.remove?.join(',') || '',
+          specialInstructions: modifications?.add?.join(',') || '',
+          quantity: 1,
+        }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        toast({
+          title: "Order Processed",
+          description: `${menuItem.name} sent to kitchen.`,
+        });
+        
+        // Generate insight for POS order
+        const insight = `POS: New order for ${menuItem.name} - $${menuItem.price.toFixed(2)}`;
+        setRealtimeInsights(prev => [insight, ...prev].slice(0, 10));
+        
+        refreshData();
+        return true;
+      } else {
+        const error = await res.json();
+        toast({
+          variant: "destructive",
+          title: "Order Failed",
+          description: error.message || "Failed to process order.",
+        });
+        return false;
+      }
+    } catch (error) {
       toast({
         variant: "destructive",
-        title: "Out of Stock",
-        description: `Cannot make ${menuItem.name}. Missing ingredients.`,
+        title: "Error",
+        description: "Failed to connect to server.",
       });
       return false;
     }
-
-    // Deduct stock (modified)
-    setInventory(prev => prev.map(item => {
-      const ing = menuItem.ingredients.find(i => i.inventoryId === item.id);
-      if (!ing) return item;
-      
-      // If user removed this ingredient, don't deduct
-      if (modifications?.remove.includes(item.name)) return item;
-      
-      return { ...item, quantity: Math.max(0, item.quantity - ing.quantity) };
-    }));
-
-    setTotalRevenue(prev => prev + menuItem.price);
-    setOperatingFunds(prev => prev + menuItem.price); // Revenue goes back to funds
-    
-    let modText = "";
-    if (modifications && (modifications.remove.length > 0 || modifications.add.length > 0)) {
-      modText = ` (Mods: -${modifications.remove.join(',')} +${modifications.add.join(',')})`;
-    }
-    
-    addLog('sale', `Sold 1x ${menuItem.name}${modText}`, menuItem.price);
-    
-    toast({
-      title: "Order Processed",
-      description: `${menuItem.name}${modText} sent to kitchen.`,
-    });
-
-    return true;
   };
 
   const recordWaste = (menuItemId: string, reason: string) => {
