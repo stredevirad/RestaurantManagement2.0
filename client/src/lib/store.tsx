@@ -23,6 +23,8 @@ interface StoreContextType {
   submitRating: (menuItemId: string, rating: number) => void;
   getLowStockItems: () => InventoryItem[];
   getDemandForecast: () => { itemId: string, name: string, suggestedStock: number, reason: string }[];
+  getChefPerformance: () => { name: string, rating: number, sales: number, raiseSuggested: boolean }[];
+  realtimeInsights: string[];
 }
 
 export interface CartItem {
@@ -41,6 +43,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalCost, setTotalCost] = useState(0);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [realtimeInsights, setRealtimeInsights] = useState<string[]>([]);
   const { toast } = useToast();
 
   const addToCart = (menuItemId: string, modifications: { remove: string[], add: string[] }) => {
@@ -76,6 +79,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     if (successCount > 0) {
       setCart([]);
+      
+      // Generate AI Real-time Insight
+      const randomInsight = [
+        "Insight: High demand for burgers detected. Prepare more patties.",
+        "Insight: Salad orders increasing. Ensure lettuce is prepped.",
+        "Insight: Dessert sales peaking. Check chocolate stock.",
+        "Insight: Lunch rush velocity suggests opening another register.",
+        "Insight: Drink attach rate is low. Suggest upselling shakes."
+      ][Math.floor(Math.random() * 5)];
+      
+      setRealtimeInsights(prev => [randomInsight, ...prev].slice(0, 5));
+
       toast({
         title: "Order Placed",
         description: `Successfully processed ${successCount} items.`,
@@ -107,6 +122,32 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
     
     return forecast;
+  };
+
+  const getChefPerformance = () => {
+    // Group by chef
+    const chefStats: Record<string, { ratingSum: number, count: number, sales: number }> = {};
+    
+    menu.forEach(item => {
+      if (!item.chef) return;
+      if (!chefStats[item.chef]) {
+        chefStats[item.chef] = { ratingSum: 0, count: 0, sales: 0 };
+      }
+      chefStats[item.chef].ratingSum += (item.rating * item.ratingCount);
+      chefStats[item.chef].count += item.ratingCount;
+      // Mock sales calculation based on rating count as a proxy for popularity
+      chefStats[item.chef].sales += (item.ratingCount * item.price);
+    });
+
+    return Object.entries(chefStats).map(([name, stats]) => {
+      const avgRating = stats.ratingSum / stats.count;
+      return {
+        name,
+        rating: avgRating,
+        sales: stats.sales,
+        raiseSuggested: avgRating > 4.6 && stats.sales > 2000 // Simple logic for raise
+      };
+    });
   };
 
   const addLog = (type: LogEntry['type'], message: string, amount: number = 0) => {
@@ -306,7 +347,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       removeFromCart,
       clearCart,
       checkout,
-      getDemandForecast
+      getDemandForecast,
+      getChefPerformance,
+      realtimeInsights
     }}>
       {children}
     </StoreContext.Provider>

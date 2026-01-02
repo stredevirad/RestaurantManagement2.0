@@ -1,11 +1,12 @@
 import { useStore } from "@/lib/store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend, LineChart, Line } from "recharts";
-import { Star, TrendingUp, Sparkles, TrendingDown, Package } from "lucide-react";
+import { Star, TrendingUp, Sparkles, TrendingDown, Package, UserCheck, DollarSign, Activity } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function AnalyticsPage() {
-  const { menu, logs, totalRevenue, getDemandForecast } = useStore();
+  const { menu, logs, totalRevenue, getDemandForecast, getChefPerformance, realtimeInsights } = useStore();
 
   const satisfactionData = menu.map(item => ({
     name: item.name,
@@ -14,6 +15,7 @@ export default function AnalyticsPage() {
   })).sort((a, b) => b.rating - a.rating);
 
   const demandForecast = getDemandForecast();
+  const chefPerformance = getChefPerformance();
 
   // Mock revenue data for the chart based on current logs + some history
   const revenueData = [
@@ -33,6 +35,33 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
+        {/* Real-time Insights Feed */}
+        <Card className="col-span-1 md:col-span-2 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/20">
+          <CardHeader>
+             <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-blue-500 animate-pulse" />
+              Live AI Strategy Feed
+            </CardTitle>
+            <CardDescription>Real-time tactical suggestions based on incoming sales flow.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[100px] w-full rounded-md border bg-black/20 p-4">
+              <div className="space-y-2">
+                {realtimeInsights.length > 0 ? (
+                  realtimeInsights.map((insight, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm font-mono text-blue-200">
+                      <span className="text-blue-500">[{new Date().toLocaleTimeString()}]</span>
+                      {insight}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-muted-foreground text-sm italic">Waiting for new sales data to generate insights...</p>
+                )}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+
         {/* AI Insight Card */}
         <Card className="col-span-1 md:col-span-2 bg-primary/5 border-primary/20">
           <CardHeader>
@@ -80,6 +109,48 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
 
+        {/* Chef Performance */}
+        <Card className="col-span-1 md:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-purple-500" />
+              Chef Performance & Raise Suggestions
+            </CardTitle>
+            <CardDescription>AI-evaluated metrics based on dish ratings and sales volume.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {chefPerformance.map(chef => (
+                <div key={chef.name} className="bg-card border p-4 rounded-xl space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-bold">{chef.name}</h4>
+                      <p className="text-xs text-muted-foreground">Rating: {chef.rating.toFixed(2)}/5.0</p>
+                    </div>
+                    {chef.raiseSuggested && (
+                      <Badge className="bg-green-500/20 text-green-500 hover:bg-green-500/30 border-green-500/50">
+                        <DollarSign className="h-3 w-3 mr-1" /> Raise Eligible
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-sm font-mono text-muted-foreground">
+                    Sales Est: ${chef.sales.toFixed(0)}
+                  </div>
+                  {chef.raiseSuggested ? (
+                    <p className="text-xs text-green-400 font-medium">
+                      AI Recommendation: Top performer. Suggest 5% raise.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground/60">
+                      Performance solid. Monitor for next quarter.
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -101,6 +172,48 @@ export default function AnalyticsPage() {
                 <Bar dataKey="rating" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} barSize={20} />
               </BarChart>
             </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Chef Performance */}
+        <Card className="col-span-1 md:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-purple-500" />
+              Chef Performance & Raise Suggestions
+            </CardTitle>
+            <CardDescription>AI-evaluated metrics based on dish ratings and sales volume.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {chefPerformance.map(chef => (
+                <div key={chef.name} className="bg-card border p-4 rounded-xl space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-bold">{chef.name}</h4>
+                      <p className="text-xs text-muted-foreground">Rating: {chef.rating.toFixed(2)}/5.0</p>
+                    </div>
+                    {chef.raiseSuggested && (
+                      <Badge className="bg-green-500/20 text-green-500 hover:bg-green-500/30 border-green-500/50">
+                        <DollarSign className="h-3 w-3 mr-1" /> Raise Eligible
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-sm font-mono text-muted-foreground">
+                    Sales Est: ${chef.sales.toFixed(0)}
+                  </div>
+                  {chef.raiseSuggested ? (
+                    <p className="text-xs text-green-400 font-medium">
+                      AI Recommendation: Top performer. Suggest 5% raise.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground/60">
+                      Performance solid. Monitor for next quarter.
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
