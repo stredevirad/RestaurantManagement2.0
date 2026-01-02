@@ -12,7 +12,7 @@ interface StoreContextType {
   
   // Actions
   restockItem: (id: string, amount: number) => void;
-  processSale: (menuItemId: string) => boolean;
+  processSale: (menuItemId: string, modifications?: { remove: string[], add: string[] }) => boolean;
   recordWaste: (menuItemId: string, reason: string) => void;
   submitRating: (menuItemId: string, rating: number) => void;
   getLowStockItems: () => InventoryItem[];
@@ -113,7 +113,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     // Deduct stock (modified)
     setInventory(prev => prev.map(item => {
-      const ing = menuItem.ingredients.find(i => i.id === item.id);
+      const ing = menuItem.ingredients.find(i => i.inventoryId === item.id);
       if (!ing) return item;
       
       // If user removed this ingredient, don't deduct
