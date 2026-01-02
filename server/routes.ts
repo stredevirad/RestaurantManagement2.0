@@ -816,7 +816,46 @@ Always be helpful and suggest related actions the user might want to take.`;
       });
     } catch (error: any) {
       console.error("Chat error:", error);
-      res.status(500).json({ error: error.message });
+      
+      // Provide a helpful fallback response when AI is unavailable
+      let fallbackResponse = "";
+      const userMessage = req.body.message || "";
+      const lowerMsg = userMessage.toLowerCase();
+      
+      if (lowerMsg.includes("menu") || lowerMsg.includes("order") || lowerMsg.includes("burger") || lowerMsg.includes("food")) {
+        const menu = await storage.getAllMenu();
+        fallbackResponse = "Here's what's on our menu:\n\n";
+        menu.forEach(item => {
+          fallbackResponse += `- ${item.name} - $${item.price.toFixed(2)} (${item.rating} stars)\n`;
+        });
+        fallbackResponse += "\nTo place an order, please tell me which item you'd like!";
+      } else if (lowerMsg.includes("inventory") || lowerMsg.includes("stock")) {
+        const inventory = await storage.getAllInventory();
+        const lowStock = inventory.filter(item => item.quantity < item.threshold);
+        if (lowStock.length > 0) {
+          fallbackResponse = "Low stock items:\n\n";
+          lowStock.forEach(item => {
+            fallbackResponse += `- ${item.name}: ${item.quantity} ${item.unit} (threshold: ${item.threshold})\n`;
+          });
+        } else {
+          fallbackResponse = "All inventory levels are healthy! No items are low on stock.";
+        }
+      } else if (lowerMsg.includes("budget") || lowerMsg.includes("funds") || lowerMsg.includes("money")) {
+        const fundsStr = await storage.getSetting("operating_funds");
+        const funds = fundsStr ? parseFloat(fundsStr.value) : 5000;
+        fallbackResponse = `Current operating budget: $${funds.toFixed(2)}`;
+      } else {
+        fallbackResponse = "I'm THALLIPOLI AI. I can help you with:\n\n- View the menu and place orders\n- Check inventory and low stock alerts\n- View financial status\n\nWhat would you like to do?";
+      }
+      
+      // Create or get conversation for fallback
+      let fallbackConvId = req.body.conversationId;
+      if (!fallbackConvId) {
+        const conv = await storage.createConversation("New Chat");
+        fallbackConvId = conv.id;
+      }
+      await storage.createMessage(fallbackConvId, "assistant", fallbackResponse);
+      res.json({ conversationId: fallbackConvId, response: fallbackResponse });
     }
   });
   
