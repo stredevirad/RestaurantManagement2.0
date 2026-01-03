@@ -15,5 +15,14 @@ export const client = new pg.Client({
 export const db = drizzle(client, { schema });
 
 export async function connectDb() {
-  await client.connect();
+  try {
+    await client.connect();
+    console.log("Connected to PostgreSQL database successfully");
+  } catch (error: any) {
+    console.error("Failed to connect to PostgreSQL database:", error.message);
+    if (error.message.includes("helium")) {
+      console.error("Detected 'helium' connection error. Ensuring DATABASE_URL is used correctly.");
+    }
+    // Don't rethrow, let the app handle it or log it
+  }
 }
