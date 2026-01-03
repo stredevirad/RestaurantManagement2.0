@@ -788,13 +788,14 @@ Always be helpful and suggest related actions the user might want to take.`;
             
             // ALWAYS use our fallback formatter for reliable formatting
             // The AI often returns JSON despite instructions
-            finalResponse = formatFunctionResult(part.functionCall.name, functionResult);
+            const formattedResult = formatFunctionResult(part.functionCall.name, functionResult);
+            finalResponse += (finalResponse ? "\n\n" : "") + formattedResult;
             
           } else if (part.text) {
             let textResponse = part.text;
             // Guard against JSON in regular responses too
             if (isJsonResponse(textResponse)) {
-              textResponse = "I can help you with that! What would you like to know about our menu, inventory, or orders?";
+              textResponse = "I've analyzed the data for you! What else would you like to know about our menu, inventory, or financial status?";
             }
             finalResponse += textResponse;
           }
@@ -822,30 +823,31 @@ Always be helpful and suggest related actions the user might want to take.`;
       const userMessage = req.body.message || "";
       const lowerMsg = userMessage.toLowerCase();
       
-      if (lowerMsg.includes("menu") || lowerMsg.includes("order") || lowerMsg.includes("burger") || lowerMsg.includes("food")) {
+      if (lowerMsg.includes("menu") || lowerMsg.includes("order") || lowerMsg.includes("burger") || lowerMsg.includes("food") || lowerMsg.includes("buy") || lowerMsg.includes("eat")) {
         const menu = await storage.getAllMenu();
-        fallbackResponse = "Here's what's on our menu:\n\n";
+        fallbackResponse = "I can definitely help you with that! Here's our current menu:\n\n";
         menu.forEach(item => {
-          fallbackResponse += `- ${item.name} - $${item.price.toFixed(2)} (${item.rating} stars)\n`;
+          fallbackResponse += `- ${item.name}: $${item.price.toFixed(2)} (${item.rating} stars)\n`;
         });
-        fallbackResponse += "\nTo place an order, please tell me which item you'd like!";
-      } else if (lowerMsg.includes("inventory") || lowerMsg.includes("stock")) {
+        fallbackResponse += "\nTo place an order, just tell me what you'd like! I'll ask about any allergies before confirming.";
+      } else if (lowerMsg.includes("inventory") || lowerMsg.includes("stock") || lowerMsg.includes("low")) {
         const inventory = await storage.getAllInventory();
         const lowStock = inventory.filter(item => item.quantity < item.threshold);
         if (lowStock.length > 0) {
-          fallbackResponse = "Low stock items:\n\n";
+          fallbackResponse = "I've checked the pantry! Here are the items running low:\n\n";
           lowStock.forEach(item => {
-            fallbackResponse += `- ${item.name}: ${item.quantity} ${item.unit} (threshold: ${item.threshold})\n`;
+            fallbackResponse += `- ${item.name}: ${item.quantity} ${item.unit} (we should have at least ${item.threshold})\n`;
           });
         } else {
-          fallbackResponse = "All inventory levels are healthy! No items are low on stock.";
+          fallbackResponse = "I've checked the inventory and everything looks great! All stock levels are healthy.";
         }
-      } else if (lowerMsg.includes("budget") || lowerMsg.includes("funds") || lowerMsg.includes("money")) {
+      } else if (lowerMsg.includes("budget") || lowerMsg.includes("funds") || lowerMsg.includes("money") || lowerMsg.includes("financial") || lowerMsg.includes("status") || lowerMsg.includes("balance") || lowerMsg.includes("revenue")) {
         const fundsStr = await storage.getSetting("operating_funds");
         const funds = fundsStr ? parseFloat(fundsStr.value) : 5000;
-        fallbackResponse = `Current operating budget: $${funds.toFixed(2)}`;
+        const revenue = await storage.getTotalRevenue();
+        fallbackResponse = `Here is the current financial status:\n\n- Operating Budget: $${funds.toFixed(2)}\n- Total Revenue to date: $${revenue.toFixed(2)}`;
       } else {
-        fallbackResponse = "I'm THALLIPOLI AI. I can help you with:\n\n- View the menu and place orders\n- Check inventory and low stock alerts\n- View financial status\n\nWhat would you like to do?";
+        fallbackResponse = "I'm THALLIPOLI AI, your kitchen assistant! I can help you with:\n\n- 🍔 Viewing the menu and placing orders\n- 📦 Checking inventory and low stock alerts\n- 💰 Viewing financial status and budget\n\nWhat would you like to do today?";
       }
       
       // Create or get conversation for fallback
