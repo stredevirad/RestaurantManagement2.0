@@ -317,7 +317,6 @@ async function handleFunctionCall(functionName: string, args: any): Promise<any>
           status: "pending"
         },
         [{
-          orderId: 0,
           menuItemId: args.menuItemId,
           menuItemName: menuItem.name,
           price: menuItem.price,
@@ -769,7 +768,7 @@ Always be helpful and suggest related actions the user might want to take.`;
           ...chatMessages,
         ],
         config: {
-          tools: [{ functionDeclarations: functions }],
+          tools: [{ functionDeclarations: functions as any }],
           toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
         },
       });
@@ -780,7 +779,7 @@ Always be helpful and suggest related actions the user might want to take.`;
       // Handle function calls
       if (candidate?.content?.parts) {
         for (const part of candidate.content.parts) {
-          if (part.functionCall) {
+          if (part.functionCall && part.functionCall.name && part.functionCall.args) {
             const functionResult = await handleFunctionCall(
               part.functionCall.name,
               part.functionCall.args
